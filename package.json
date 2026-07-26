@@ -1,20 +1,69 @@
 {
-  "name": "disk-analyzer",
+  "name": "AeroDisk",
   "version": "1.0.0",
-  "description": "Filelight-style disk usage analyzer",
+  "description": "AeroDisk is a fast and efficient disk usage analyzer for macOS, Windows, and Linux",
+  "author": "Sadid <sadidhasan56@gmail.com>",
   "main": "dist/main/main.js",
   "scripts": {
     "build": "node scripts/build.js",
     "dev": "node scripts/watch.js",
     "start": "electron .",
-    "postinstall": "node -e \"if(process.platform==='darwin'){const cp=require('child_process');try{cp.execSync('codesign --force --deep --sign - node_modules/electron/dist/Electron.app');console.log('Successfully ad-hoc signed Electron.app');}catch(e){console.warn('Failed to sign Electron.app:',e.message);}}\""
+    "postinstall": "node -e \"if(process.platform==='darwin'){const cp=require('child_process');try{cp.execSync('codesign --force --deep --sign - node_modules/electron/dist/Electron.app');console.log('Successfully ad-hoc signed Electron.app');}catch(e){console.warn('Failed to sign Electron.app:',e.message);}}\"",
+    "dist:dir": "yarn build && electron-builder --dir",
+    "dist": "yarn build && electron-builder",
+    "dist:mac": "yarn build && electron-builder --mac dmg",
+    "dist:linux": "yarn build && electron-builder --linux deb rpm AppImage",
+    "dist:win": "yarn build && electron-builder --win nsis portable",
+    "dist:unix": "yarn build && electron-builder --mac dmg --linux deb rpm AppImage",
+    "dist:all": "yarn build && electron-builder -mwl"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
     "typescript": "^5.3.3"
   },
   "dependencies": {
     "trash": "^8.1.1"
+  },
+  "build": {
+    "appId": "com.aerodisk.app",
+    "productName": "AeroDisk",
+    "directories": {
+      "output": "release"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "sadid56",
+      "repo": "AeroDisk"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg"
+      ],
+      "icon": "src/assets/favicon.png",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "src/assets/favicon.png"
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "rpm",
+        "AppImage"
+      ],
+      "category": "Utility",
+      "icon": "src/assets/favicon.png"
+    }
   }
 }

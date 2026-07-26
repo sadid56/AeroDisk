@@ -4,6 +4,7 @@ jspm_packages/
 
 # Compiled build outputs
 dist/
+release/
 out/
 build/
 
