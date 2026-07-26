@@ -41,16 +41,20 @@ console.log('TypeScript compiled successfully.');
 
 // 3. Copy Assets
 console.log('Copying static assets...');
-const srcRenderer = path.join(__dirname, '..', 'src', 'renderer');
-const distRenderer = path.join(distPath, 'renderer');
+const srcPath = path.join(__dirname, '..', 'src');
 
-copyFile(path.join(srcRenderer, 'index.html'), path.join(distRenderer, 'index.html'));
-copyFile(path.join(srcRenderer, 'styles.css'), path.join(distRenderer, 'styles.css'));
-copyFile(path.join(srcRenderer, 'favicon.png'), path.join(distRenderer, 'favicon.png'));
-copyFile(path.join(srcRenderer, 'css', 'base.css'), path.join(distRenderer, 'css', 'base.css'));
-copyFile(path.join(srcRenderer, 'css', 'titlebar.css'), path.join(distRenderer, 'css', 'titlebar.css'));
-copyFile(path.join(srcRenderer, 'css', 'sidebar.css'), path.join(distRenderer, 'css', 'sidebar.css'));
-copyFile(path.join(srcRenderer, 'css', 'workspace.css'), path.join(distRenderer, 'css', 'workspace.css'));
-copyFile(path.join(srcRenderer, 'css', 'components.css'), path.join(distRenderer, 'css', 'components.css'));
+// Copy HTML
+copyFile(path.join(srcPath, 'renderer', 'index.html'), path.join(distPath, 'renderer', 'index.html'));
+
+// Copy Assets
+copyFile(path.join(srcPath, 'assets', 'favicon.png'), path.join(distPath, 'assets', 'favicon.png'));
+
+// Copy Stylesheets
+copyFile(path.join(srcPath, 'styles', 'styles.css'), path.join(distPath, 'styles', 'styles.css'));
+copyFile(path.join(srcPath, 'styles', 'base.css'), path.join(distPath, 'styles', 'base.css'));
+copyFile(path.join(srcPath, 'styles', 'titlebar.css'), path.join(distPath, 'styles', 'titlebar.css'));
+copyFile(path.join(srcPath, 'styles', 'sidebar.css'), path.join(distPath, 'styles', 'sidebar.css'));
+copyFile(path.join(srcPath, 'styles', 'workspace.css'), path.join(distPath, 'styles', 'workspace.css'));
+copyFile(path.join(srcPath, 'styles', 'components.css'), path.join(distPath, 'styles', 'components.css'));
 
 console.log('=== Build Completed Successfully ===');

@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('api', {
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
   getHomeFolder: (): Promise<string> => ipcRenderer.invoke('get-home-folder'),
+  setDockIcon: (dataUrl: string): Promise<void> => ipcRenderer.invoke('set-dock-icon', dataUrl),
   scanFolder: (targetPath: string): Promise<any[]> => ipcRenderer.invoke('scan-folder', targetPath),
   getDiskSpace: (targetPath: string): Promise<{ total: number; available: number } | null> =>
     ipcRenderer.invoke('get-disk-space', targetPath),

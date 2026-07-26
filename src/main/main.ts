@@ -1,8 +1,10 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { Worker } from 'worker_threads';
+
+app.setName('AeroDisk');
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -13,8 +15,8 @@ function createWindow() {
     minWidth: 900,
     minHeight: 650,
     backgroundColor: '#0f0f15',
-    icon: path.join(__dirname, '../renderer/favicon.png'),
-    titleBarStyle: 'hiddenInset', // Sleek native look on macOS
+    icon: path.join(__dirname, '../assets/favicon.png'),
+    titleBarStyle: 'hiddenInset', 
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,
@@ -29,7 +31,14 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  if (process.platform === 'darwin') {
+    const iconPath = path.join(__dirname, '../assets/favicon.png');
+    const image = nativeImage.createFromPath(iconPath);
+    app.dock.setIcon(image);
+  }
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -46,6 +55,17 @@ app.on('activate', () => {
 // ---- Get Home Directory ----
 ipcMain.handle('get-home-folder', () => {
   return os.homedir();
+});
+
+ipcMain.handle('set-dock-icon', (_event, dataUrl: string) => {
+  if (process.platform === 'darwin') {
+    try {
+      const img = nativeImage.createFromDataURL(dataUrl);
+      app.dock.setIcon(img);
+    } catch (err: any) {
+      console.error('Failed to set macOS Dock icon dynamically:', err.message);
+    }
+  }
 });
 
 // ---- Folder Selection ----
@@ -75,7 +95,6 @@ ipcMain.handle('get-disk-space', (_event, targetPath: string) => {
 ipcMain.handle('scan-folder', async (event, targetPath: string) => {
   const sender = event.sender;
   return new Promise((resolve, reject) => {
-    // Note: Compiled worker will be in dist/worker/scan-worker.js
     const workerPath = path.join(__dirname, '../worker/scan-worker.js');
     const worker = new Worker(workerPath, {
       workerData: { targetPath }
@@ -103,7 +122,6 @@ ipcMain.handle('scan-folder', async (event, targetPath: string) => {
   });
 });
 
-// ---- Dynamic Trash Module Integration (ESM-only module support) ----
 ipcMain.handle('delete-item', async (_event, targetPath: string) => {
   try {
     const { default: trash } = await (new Function('return import("trash")')());
@@ -115,7 +133,6 @@ ipcMain.handle('delete-item', async (_event, targetPath: string) => {
   }
 });
 
-// ---- Open Item in Native Explorer/Finder ----
 ipcMain.handle('reveal-in-folder', (_event, targetPath: string) => {
   shell.showItemInFolder(targetPath);
 });

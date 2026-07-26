@@ -2,7 +2,7 @@
 
 AeroDisk is a high-performance, visually stunning storage analyzer built with **Electron**, **TypeScript**, and **Vanilla CSS**. Inspired by utility tools like Filelight and DaisyDisk, it provides a premium interactive sunburst visualization of your filesystem, allowing you to easily discover space-hogging folders and clean up your storage.
 
-![AeroDisk Icon](src/renderer/favicon.png)
+![AeroDisk Icon](src/assets/favicon.png)
 
 ---
 
@@ -30,6 +30,15 @@ AeroDisk/
 │   ├── build.js           # Cross-platform production build and asset copier
 │   └── watch.js           # Development watcher (spawns tsc --watch & hot-reloads Electron)
 ├── src/
+│   ├── assets/
+│   │   └── favicon.png    # Modern icon asset
+│   ├── styles/            # Modularized stylesheets
+│   │   ├── styles.css     # Main style entry point
+│   │   ├── base.css       # Reset & CSS variables
+│   │   ├── titlebar.css   # Draggable title controls
+│   │   ├── sidebar.css    # Sidebar navigation and cards
+│   │   ├── workspace.css  # Main dashboard layout and states
+│   │   └── components.css # Lists, menus, dialogs, and toasts
 │   ├── main/
 │   │   └── main.ts        # Electron main process (IPC handlers, window creation)
 │   ├── preload/
@@ -38,14 +47,7 @@ AeroDisk/
 │   │   └── scan-worker.ts # Multi-threaded recursive folder scanner
 │   └── renderer/
 │       ├── index.html     # Semantic layout and modal markup
-│       ├── renderer.ts    # Chart canvas drawing, UI controllers, drag-and-drop
-│       ├── favicon.png    # Modern icon asset
-│       └── css/           # Modularized stylesheets
-│           ├── base.css   # Reset & CSS variables
-│           ├── titlebar.css  # Draggable title controls
-│           ├── sidebar.css   # Sidebar navigation and cards
-│           ├── workspace.css # Main dashboard layout and states
-│           └── components.css# Lists, menus, dialogs, and toasts
+│       └── renderer.ts    # Chart canvas drawing, UI controllers, drag-and-drop
 ├── tsconfig.json          # TypeScript compiler configuration
 ├── package.json           # Dependencies and build script register
 └── yarn.lock              # Yarn lockfile

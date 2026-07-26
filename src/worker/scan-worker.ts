@@ -32,18 +32,11 @@ function scanDirectory(dirPath: string, parentId: number | null): FileNode {
   try {
     entries = fs.readdirSync(dirPath, { withFileTypes: true });
   } catch (err) {
-    // Permission denied or reading errors: return the node with 0 bytes and empty children
     return node;
   }
 
   let total = 0;
   for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue; // skip hidden files and directories
-
-    // Skip heavy system cache/application settings folders to optimize performance and prevent permission errors
-    if (entry.name === 'Library' && process.platform === 'darwin') continue;
-    if (entry.name === 'AppData' && process.platform === 'win32') continue;
-
     const fullPath = path.join(dirPath, entry.name);
 
     try {
@@ -55,8 +48,6 @@ function scanDirectory(dirPath: string, parentId: number | null): FileNode {
         total += child.size;
       } else if (entry.isFile()) {
         const stats = fs.statSync(fullPath);
-        // Use allocated blocks if available (stat.blocks * 512 bytes) for real disk space,
-        // otherwise fall back to raw logical file size.
         const size = stats.blocks ? stats.blocks * 512 : stats.size;
         const fileId = nodes.length;
 
@@ -72,7 +63,6 @@ function scanDirectory(dirPath: string, parentId: number | null): FileNode {
         node.childIds.push(fileId);
         total += size;
 
-        // Post progress messages occasionally so the UI can update live
         if (nodes.length % 1000 === 0 && parentPort) {
           parentPort.postMessage({ type: 'progress', path: fullPath, count: nodes.length });
         }

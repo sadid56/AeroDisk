@@ -1,4 +1,3 @@
-// ---- State Management ----
 interface FileNode {
   id: number;
   name: string;
@@ -22,6 +21,7 @@ interface Window {
   api: {
     selectFolder: () => Promise<string | null>;
     getHomeFolder: () => Promise<string>;
+    setDockIcon: (dataUrl: string) => Promise<void>;
     scanFolder: (targetPath: string) => Promise<FileNode[]>;
     getDiskSpace: (targetPath: string) => Promise<{ total: number; available: number } | null>;
     deleteItem: (targetPath: string) => Promise<{ success: boolean; error?: string }>;
@@ -655,8 +655,35 @@ canvas.addEventListener('mouseleave', () => {
   }
 });
 
+function cropAndSetAppIcon() {
+  const size = 256;
+  const canvasEl = document.createElement('canvas');
+  canvasEl.width = size;
+  canvasEl.height = size;
+  const canvasCtx = canvasEl.getContext('2d');
+  if (!canvasCtx) return;
+
+  const img = new Image();
+  img.onload = () => {
+    // macOS rounded squircle corner radius is approx 21% of icon size
+    const radius = size * 0.21;
+    canvasCtx.beginPath();
+    canvasCtx.roundRect(0, 0, size, size, radius);
+    canvasCtx.clip();
+    
+    canvasCtx.drawImage(img, 0, 0, size, size);
+    
+    const dataUrl = canvasEl.toDataURL('image/png');
+    window.api.setDockIcon(dataUrl).catch((err) => {
+      console.warn('Failed to dynamically apply macOS Dock icon:', err.message);
+    });
+  };
+  img.src = '../assets/favicon.png';
+}
+
 // Run Init & Default Scan of Home Directory
 setupDragAndDrop();
+cropAndSetAppIcon(); // Apply rounded corner mask for macOS Dock icon
 window.api.getHomeFolder().then((homePath) => {
   if (homePath) {
     startScan(homePath);
