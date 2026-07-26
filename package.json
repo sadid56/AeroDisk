@@ -1,0 +1,20 @@
+{
+  "name": "disk-analyzer",
+  "version": "1.0.0",
+  "description": "Filelight-style disk usage analyzer",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "node scripts/watch.js",
+    "start": "electron .",
+    "postinstall": "node -e \"if(process.platform==='darwin'){const cp=require('child_process');try{cp.execSync('codesign --force --deep --sign - node_modules/electron/dist/Electron.app');console.log('Successfully ad-hoc signed Electron.app');}catch(e){console.warn('Failed to sign Electron.app:',e.message);}}\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "electron": "^31.0.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "trash": "^8.1.1"
+  }
+}
