@@ -2,7 +2,6 @@ use std::fs;
 use std::path::Path;
 
 const PROTECTED_PATHS: &[&str] = &[
-    "/",
     "/boot",
     "/boot/efi",
     "/etc",
@@ -23,18 +22,40 @@ const PROTECTED_PATHS: &[&str] = &[
     "c:\\program files (x86)",
 ];
 
-pub fn is_protected_system_path(target_path: &str) -> bool {
-    let clean_path = target_path.trim().to_lowercase();
-    let normalized = clean_path.trim_end_matches('/');
+const PROTECTED_EXACT_PATHS: &[&str] = &[
+    "/",
+    "c:\\",
+];
 
-    for protected in PROTECTED_PATHS {
-        let p_clean = protected.to_lowercase();
-        let p_norm = p_clean.trim_end_matches('/');
-        if normalized == p_norm || clean_path == p_clean {
+fn normalize_path_string(path: &str) -> String {
+    let mut normalized = path.trim().replace('\\', "/").to_lowercase();
+    while normalized.len() > 1 && normalized.ends_with('/') {
+        normalized.pop();
+    }
+    normalized
+}
+
+fn matches_path_prefix(target: &str, protected: &str) -> bool {
+    let target_norm = normalize_path_string(target);
+    let protected_norm = normalize_path_string(protected);
+
+    target_norm == protected_norm
+        || target_norm
+            .strip_prefix(&protected_norm)
+            .map(|rest| rest.starts_with('/'))
+            .unwrap_or(false)
+}
+
+pub fn is_protected_system_path(target_path: &str) -> bool {
+    for protected in PROTECTED_EXACT_PATHS {
+        if normalize_path_string(target_path) == normalize_path_string(protected) {
             return true;
         }
     }
-    false
+
+    PROTECTED_PATHS
+        .iter()
+        .any(|protected| matches_path_prefix(target_path, protected))
 }
 
 pub fn delete_item(target_path: &str) -> Result<(), String> {

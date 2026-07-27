@@ -1,4 +1,5 @@
 import React from 'react';
+import { Loader2 } from 'lucide-react';
 import { StorageOverview } from '../components/StorageOverview';
 import { BreadcrumbNav } from '../components/BreadcrumbNav';
 import { SunburstChart } from '../components/SunburstChart';
@@ -15,6 +16,9 @@ interface AnalyzerPageProps {
   selectedNode: FileNode | null;
   activeNode: FileNode | null;
   searchQuery: string;
+  isScanning: boolean;
+  scanCount: number;
+  scanStatusPath: string;
   onHoverNode: (node: FileNode | null) => void;
   onSelectNode: (node: FileNode | null) => void;
   onNavigate: (id: number) => void;
@@ -31,6 +35,9 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = ({
   selectedNode,
   activeNode,
   searchQuery,
+  isScanning,
+  scanCount,
+  scanStatusPath,
   onHoverNode,
   onSelectNode,
   onNavigate,
@@ -47,6 +54,25 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = ({
         totalItems={flatNodes.length}
       />
 
+      {isScanning && (
+        <div className="px-6 py-2 border-b border-accent-purple/20 bg-accent-purple/10 flex items-center gap-3 text-xs">
+          <Loader2 className="w-4 h-4 text-accent-purple animate-spin shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold text-slate-100">
+                Indexing {scanCount.toLocaleString()} items
+              </span>
+              <span className="text-[11px] text-slate-400 truncate max-w-[55%]" title={scanStatusPath}>
+                {scanStatusPath}
+              </span>
+            </div>
+            <div className="mt-1 h-1 w-full rounded-full bg-background overflow-hidden">
+              <div className="h-full w-full bg-gradient-to-r from-accent-purple via-accent-pink to-accent-blue animate-pulse" />
+            </div>
+          </div>
+        </div>
+      )}
+
       <BreadcrumbNav
         flatNodes={flatNodes}
         breadcrumbIds={breadcrumbIds}
@@ -60,6 +86,7 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = ({
             flatNodes={flatNodes}
             currentId={currentId}
             hoveredNode={hoveredNode}
+            isScanning={isScanning}
             onHoverNode={onHoverNode}
             onNavigate={onNavigate}
           />
@@ -75,6 +102,7 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = ({
             activeNode={activeNode}
             flatNodes={flatNodes}
             searchQuery={searchQuery}
+            isScanning={isScanning}
             hoveredNode={hoveredNode}
             selectedNode={selectedNode}
             onHoverNode={onHoverNode}

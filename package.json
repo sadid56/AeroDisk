@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.0.0",
   "type": "module",
-  "description": "High-performance cross-platform disk usage analyzer powered by Rust and Tauri",
+  "description": "High-performance disk usage analyzer with a polished Rust and Tauri desktop experience",
   "author": "Sadid <sadidhasan56@gmail.com>",
   "scripts": {
     "dev": "vite",

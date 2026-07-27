@@ -7,6 +7,7 @@ interface FileListProps {
   activeNode: FileNode | null;
   flatNodes: FileNode[];
   searchQuery: string;
+  isScanning: boolean;
   hoveredNode: FileNode | null;
   selectedNode: FileNode | null;
   onHoverNode: (node: FileNode | null) => void;
@@ -21,6 +22,7 @@ export const FileList: React.FC<FileListProps> = ({
   activeNode,
   flatNodes,
   searchQuery,
+  isScanning,
   hoveredNode,
   selectedNode,
   onHoverNode,
@@ -62,6 +64,16 @@ export const FileList: React.FC<FileListProps> = ({
   }, [activeNode, flatNodes, searchQuery, isSearching]);
 
   if (!activeNode) {
+    if (isScanning) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 text-xs font-medium gap-2">
+          <div className="w-8 h-8 rounded-full border-2 border-accent-purple border-t-transparent animate-spin" />
+          <div>Indexing files in real time...</div>
+          <div className="text-[11px] text-slate-600">The first folder view will appear as soon as the root is ready.</div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex-1 flex items-center justify-center p-6 text-slate-500 text-xs font-medium">
         No folder selected.

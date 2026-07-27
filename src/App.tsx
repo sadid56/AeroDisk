@@ -30,7 +30,6 @@ export const App: React.FC = () => {
     searchQuery,
     startScan,
     selectFolderDialog,
-    scanHomeFolder,
     navigateTo,
     removeNode,
     addFolderNode,
@@ -125,11 +124,9 @@ export const App: React.FC = () => {
             setCreateFolderTarget(activeNode);
           }
         }}
-        onHomeFolder={() => {
-          navigate("/");
-          scanHomeFolder();
+        onRescan={() => {
+          rootPath && startScan(rootPath);
         }}
-        onRescan={() => rootPath && startScan(rootPath)}
         onOpenSearchModal={() => setIsSearchOpen(true)}
         isScanning={isScanning}
         hasScanData={hasScanData}
@@ -153,10 +150,6 @@ export const App: React.FC = () => {
         onNavigate={navigateTo}
         onContextMenu={handleContextMenu}
         onCopyPath={() => showToast({ message: "Copied", description: "Path copied to clipboard", type: "success" })}
-        onSelectFolder={() => {
-          navigate("/");
-          selectFolderDialog();
-        }}
         onScanPath={handleScanPath}
       />
 

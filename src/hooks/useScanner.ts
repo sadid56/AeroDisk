@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
-import { FileNode, ProgressPayload } from '../types';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
+import { showToast } from "../providers/ToastProvider";
+import { FileNode, ProgressPayload, ScanCompletePayload, ScanDeltaPayload, ScanErrorPayload } from "../types";
 
 export function useScanner() {
   const [flatNodes, setFlatNodes] = useState<FileNode[]>([]);
@@ -10,78 +11,208 @@ export function useScanner() {
   const [breadcrumbIds, setBreadcrumbIds] = useState<number[]>([]);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scanCount, setScanCount] = useState<number>(0);
-  const [scanStatusPath, setScanStatusPath] = useState<string>('');
+  const [scanStatusPath, setScanStatusPath] = useState<string>("");
   const [hoveredNode, setHoveredNode] = useState<FileNode | null>(null);
   const [selectedNode, setSelectedNode] = useState<FileNode | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>("");
 
-  const startScan = useCallback(async (targetPath: string) => {
-    setIsScanning(true);
-    setScanCount(0);
-    setScanStatusPath('Initializing scan...');
-    setHoveredNode(null);
-    setSelectedNode(null);
+  const activeScanIdRef = useRef<string | null>(null);
+  const scanCountRef = useRef<number>(0);
+  const deltaQueueRef = useRef<ScanDeltaPayload[]>([]);
+  const flushRafRef = useRef<number | null>(null);
+  const listenerCleanupRef = useRef<Array<() => void>>([]);
+  const rootInitializedRef = useRef<boolean>(false);
 
-    let unlisten: (() => void) | null = null;
+  const cleanupScanStream = useCallback(() => {
+    if (flushRafRef.current !== null) {
+      cancelAnimationFrame(flushRafRef.current);
+      flushRafRef.current = null;
+    }
 
-    try {
-      unlisten = await listen<ProgressPayload>('scan-progress', (event) => {
-        setScanCount(event.payload.count);
-        setScanStatusPath(event.payload.path);
-      });
+    deltaQueueRef.current = [];
+    scanCountRef.current = 0;
+    rootInitializedRef.current = false;
 
-      const nodes = await invoke<FileNode[]>('scan_folder', { targetPath });
+    const listeners = listenerCleanupRef.current;
+    listenerCleanupRef.current = [];
 
-      setFlatNodes(nodes);
-      if (nodes.length > 0) {
-        setCurrentId(0);
-        setBreadcrumbIds([0]);
-        setSelectedNode(nodes[0]);
+    for (const unlisten of listeners) {
+      try {
+        unlisten();
+      } catch {
+        // silent cleanup
       }
-    } catch (err: any) {
-      console.error('Scan failed:', err);
-      throw err;
-    } finally {
-      if (unlisten) unlisten();
-      setIsScanning(false);
     }
   }, []);
+
+  const flushQueuedDeltas = useCallback(() => {
+    flushRafRef.current = null;
+
+    const deltas = deltaQueueRef.current.splice(0);
+    if (deltas.length === 0) return;
+
+    let addedCount = 0;
+    for (const delta of deltas) {
+      addedCount += delta.added.length;
+    }
+
+    scanCountRef.current += addedCount;
+    setScanCount(scanCountRef.current);
+
+    setFlatNodes((prevNodes) => {
+      const nextNodes = [...prevNodes];
+
+      for (const delta of deltas) {
+        for (const node of delta.added) {
+          nextNodes[node.id] = node;
+
+          if (node.parentId !== null && nextNodes[node.parentId]) {
+            const parent = nextNodes[node.parentId];
+            nextNodes[node.parentId] = {
+              ...parent,
+              childIds: parent.childIds.includes(node.id) ? parent.childIds : [...parent.childIds, node.id],
+            };
+          }
+        }
+
+        for (const node of delta.updated) {
+          if (nextNodes[node.id]) {
+            nextNodes[node.id] = {
+              ...nextNodes[node.id],
+              ...node,
+            };
+          } else {
+            nextNodes[node.id] = node;
+          }
+        }
+      }
+
+      return nextNodes;
+    });
+  }, []);
+
+  const scheduleFlush = useCallback(() => {
+    if (flushRafRef.current !== null) return;
+
+    flushRafRef.current = requestAnimationFrame(() => {
+      flushQueuedDeltas();
+    });
+  }, [flushQueuedDeltas]);
+
+  const startScan = useCallback(
+    async (targetPath: string) => {
+      if (activeScanIdRef.current) {
+        return;
+      }
+
+      cleanupScanStream();
+
+      const scanId = crypto.randomUUID();
+      activeScanIdRef.current = scanId;
+      rootInitializedRef.current = false;
+
+      setIsScanning(true);
+      scanCountRef.current = 0;
+      setScanCount(0);
+      setScanStatusPath("Initializing scan...");
+      setFlatNodes([]);
+      setCurrentId(null);
+      setBreadcrumbIds([]);
+      setHoveredNode(null);
+      setSelectedNode(null);
+
+      try {
+        const unlistenProgress = await listen<ProgressPayload>("scan-progress", (event) => {
+          if (event.payload.scanId !== activeScanIdRef.current) return;
+          setScanStatusPath(event.payload.path);
+        });
+
+        const unlistenDelta = await listen<ScanDeltaPayload>("scan-delta", (event) => {
+          if (event.payload.scanId !== activeScanIdRef.current) return;
+          deltaQueueRef.current.push(event.payload);
+          scheduleFlush();
+        });
+
+        const unlistenComplete = await listen<ScanCompletePayload>("scan-complete", (event) => {
+          if (event.payload.scanId !== activeScanIdRef.current) return;
+
+          if (flushRafRef.current !== null) {
+            cancelAnimationFrame(flushRafRef.current);
+            flushRafRef.current = null;
+          }
+
+          flushQueuedDeltas();
+          setScanCount(event.payload.count);
+          setIsScanning(false);
+          activeScanIdRef.current = null;
+          cleanupScanStream();
+        });
+
+        const unlistenError = await listen<ScanErrorPayload>("scan-error", (event) => {
+          if (event.payload.scanId !== activeScanIdRef.current) return;
+
+          showToast({ message: "Scan Error", description: event.payload.message, type: "error" });
+          setIsScanning(false);
+          activeScanIdRef.current = null;
+          cleanupScanStream();
+        });
+
+        listenerCleanupRef.current = [unlistenProgress, unlistenDelta, unlistenComplete, unlistenError];
+
+        // Let React paint the loading state before the native scan begins.
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => resolve());
+        });
+
+        await invoke("scan_folder_live", { targetPath, scanId });
+      } catch (err: any) {
+        setIsScanning(false);
+        activeScanIdRef.current = null;
+        cleanupScanStream();
+        throw err;
+      }
+    },
+    [cleanupScanStream, flushQueuedDeltas, scheduleFlush],
+  );
 
   const selectFolderDialog = useCallback(async () => {
     const selected = await open({
       directory: true,
       multiple: false,
     });
-    if (selected && typeof selected === 'string') {
+    if (selected && typeof selected === "string") {
       await startScan(selected);
     }
   }, [startScan]);
 
   const scanHomeFolder = useCallback(async () => {
     try {
-      const home = await invoke<string>('get_home_folder');
+      const home = await invoke<string>("get_home_folder");
       if (home) {
         await startScan(home);
       }
     } catch (err) {
-      console.error('Failed to get home folder:', err);
+      console.error("Failed to get home folder:", err);
     }
   }, [startScan]);
 
-  const navigateTo = useCallback((nodeId: number) => {
-    setCurrentId(nodeId);
-    setBreadcrumbIds((prev) => {
-      const idx = prev.indexOf(nodeId);
-      if (idx !== -1) {
-        return prev.slice(0, idx + 1);
+  const navigateTo = useCallback(
+    (nodeId: number) => {
+      setCurrentId(nodeId);
+      setBreadcrumbIds((prev) => {
+        const idx = prev.indexOf(nodeId);
+        if (idx !== -1) {
+          return prev.slice(0, idx + 1);
+        }
+        return [...prev, nodeId];
+      });
+      setHoveredNode(null);
+      if (flatNodes[nodeId]) {
+        setSelectedNode(flatNodes[nodeId]);
       }
-      return [...prev, nodeId];
-    });
-    if (flatNodes[nodeId]) {
-      setSelectedNode(flatNodes[nodeId]);
-    }
-    setHoveredNode(null);
-  }, [flatNodes]);
+    },
+    [flatNodes],
+  );
 
   const removeNode = useCallback((nodeId: number) => {
     setFlatNodes((prevNodes) => {
@@ -89,7 +220,6 @@ export function useScanner() {
       const target = newNodes[nodeId];
       if (!target) return prevNodes;
 
-      // Subtract size upwards
       let pid = target.parentId;
       while (pid !== null && newNodes[pid]) {
         newNodes[pid] = {
@@ -99,7 +229,6 @@ export function useScanner() {
         pid = newNodes[pid].parentId;
       }
 
-      // Remove from parent's child list
       if (target.parentId !== null && newNodes[target.parentId]) {
         const parent = newNodes[target.parentId];
         newNodes[target.parentId] = {
@@ -123,7 +252,7 @@ export function useScanner() {
         isDirectory: true,
         size: 0,
         childIds: [],
-        parentId: parentId,
+        parentId,
       };
 
       const newNodes = [...prevNodes, newNode];
@@ -143,12 +272,17 @@ export function useScanner() {
   }, []);
 
   const resetToDashboard = useCallback(() => {
+    cleanupScanStream();
+    activeScanIdRef.current = null;
     setFlatNodes([]);
     setCurrentId(null);
     setBreadcrumbIds([]);
     setHoveredNode(null);
     setSelectedNode(null);
-  }, []);
+    setScanCount(0);
+    setScanStatusPath("");
+    setIsScanning(false);
+  }, [cleanupScanStream]);
 
   const navigateParent = useCallback(() => {
     if (currentId !== null && flatNodes[currentId]) {
@@ -159,7 +293,26 @@ export function useScanner() {
     }
   }, [currentId, flatNodes, navigateTo]);
 
-  const activeNode = currentId !== null ? flatNodes[currentId] : null;
+  const activeNode =
+    currentId !== null ? flatNodes[currentId] : flatNodes.find((node) => node && node.parentId === null) || flatNodes[0] || null;
+
+  useEffect(() => {
+    if (rootInitializedRef.current) return;
+
+    const rootNode = flatNodes.find((node) => node && node.parentId === null) || flatNodes[0];
+    if (!rootNode) return;
+
+    rootInitializedRef.current = true;
+    setCurrentId(rootNode.id);
+    setBreadcrumbIds([rootNode.id]);
+    setSelectedNode(rootNode);
+  }, [flatNodes]);
+
+  useEffect(() => {
+    return () => {
+      cleanupScanStream();
+    };
+  }, [cleanupScanStream]);
 
   return {
     flatNodes,

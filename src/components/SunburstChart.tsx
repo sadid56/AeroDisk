@@ -6,6 +6,7 @@ interface SunburstChartProps {
   flatNodes: FileNode[];
   currentId: number | null;
   hoveredNode: FileNode | null;
+  isScanning: boolean;
   onHoverNode: (node: FileNode | null) => void;
   onNavigate: (nodeId: number) => void;
 }
@@ -19,6 +20,7 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
   flatNodes,
   currentId,
   hoveredNode,
+  isScanning,
   onHoverNode,
   onNavigate,
 }) => {
@@ -240,7 +242,22 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
     onHoverNode(null);
   };
 
-  if (!rootNode) return null;
+  if (!rootNode) {
+    if (isScanning) {
+      return (
+        <div className="w-full h-full flex items-center justify-center p-6 text-center text-slate-500">
+          <div className="space-y-3">
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-gradient-to-tr from-accent-purple via-accent-pink to-accent-blue flex items-center justify-center shadow-xl shadow-accent-purple/20 animate-pulse">
+              <div className="w-5 h-5 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
+            </div>
+            <div className="text-xs font-medium text-slate-400">Building tree view...</div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  }
 
   return (
     <div ref={containerRef} className="w-full h-full flex items-center justify-center relative p-4 select-none">

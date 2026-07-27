@@ -1,11 +1,11 @@
 import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { FolderOpen, Home, RefreshCw, Search, Zap, Settings, ArrowLeft, FolderPlus, LayoutGrid } from "lucide-react";
+import { FolderOpen, RefreshCw, Search, Settings, ArrowLeft, FolderPlus, LayoutGrid } from "lucide-react";
+import logoUrl from "../assets/favicon.png";
 
 interface HeaderProps {
   onSelectFolder: () => void;
   onCreateFolder?: () => void;
-  onHomeFolder: () => void;
   onDashboard?: () => void;
   onRescan: () => void;
   onOpenSearchModal: () => void;
@@ -16,7 +16,6 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onSelectFolder,
   onCreateFolder,
-  onHomeFolder,
   onDashboard,
   onRescan,
   onOpenSearchModal,
@@ -40,8 +39,6 @@ export const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onOpenSearchModal, isSettings]);
 
-
-
   return (
     <header
       data-tauri-drag-region
@@ -57,20 +54,8 @@ export const Header: React.FC<HeaderProps> = ({
           title='Go to Main Storage Dashboard'
           className='flex items-center gap-3 hover:opacity-90 transition-opacity cursor-pointer text-left'
         >
-          <img
-            src="/src/assets/favicon.png"
-            alt="AeroDisk Logo"
-            className="w-9 h-9 rounded-xl border border-surface-border shadow-md object-cover"
-          />
-          <div>
-            <div className='flex items-center gap-2'>
-              <h1 className='font-bold text-base tracking-tight font-sans'>AeroDisk</h1>
-              <span className='px-2 py-0.5 text-[10px] font-semibold bg-accent-purple/15 text-accent-purple border border-accent-purple/30 rounded-full flex items-center gap-1'>
-                <Zap className='w-2.5 h-2.5' /> Rust v2
-              </span>
-            </div>
-            <p className='text-[11px] opacity-70 font-medium'>Cross-Platform Storage Analyzer</p>
-          </div>
+          <img src={logoUrl} alt='AeroDisk Logo' className='w-9 h-9 rounded-xl border border-surface-border shadow-md object-cover' />
+          <h1 className='font-bold text-base tracking-tight font-sans'>AeroDisk</h1>
         </button>
       </div>
 
@@ -107,15 +92,6 @@ export const Header: React.FC<HeaderProps> = ({
               className='p-2 rounded-lg bg-surface border border-surface-border hover:bg-surface-hover transition-all cursor-pointer text-slate-200 hover:text-white'
             >
               <LayoutGrid className='w-4 h-4' />
-            </button>
-
-            <button
-              onClick={onHomeFolder}
-              disabled={isScanning}
-              title='Scan Home Directory'
-              className='p-2 rounded-lg bg-surface border border-surface-border hover:bg-surface-hover disabled:opacity-50 transition-all cursor-pointer text-slate-200 hover:text-white'
-            >
-              <Home className='w-4 h-4' />
             </button>
 
             {hasScanData && (

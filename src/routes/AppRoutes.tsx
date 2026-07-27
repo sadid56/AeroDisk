@@ -1,6 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
-import { Loader2, HardDrive } from 'lucide-react';
+import { Routes, Route, useNavigate } from "react-router-dom";
 import { AnalyzerPage } from '../pages/AnalyzerPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { WelcomeDashboard } from '../components/WelcomeDashboard';
@@ -24,7 +23,6 @@ interface AppRoutesProps {
   onNavigate: (id: number) => void;
   onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
   onCopyPath: () => void;
-  onSelectFolder: () => void;
   onScanPath: (path: string) => void;
 }
 
@@ -46,7 +44,6 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   onNavigate,
   onContextMenu,
   onCopyPath,
-  onSelectFolder,
   onScanPath,
 }) => {
   const navigate = useNavigate();
@@ -54,27 +51,9 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   return (
     <Routes>
       <Route
-        path="/"
+        path='/'
         element={
-          isScanning ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-accent-purple via-accent-pink to-accent-blue flex items-center justify-center shadow-xl shadow-accent-purple/30 animate-pulse">
-                  <HardDrive className="w-8 h-8 text-white" />
-                </div>
-                <Loader2 className="w-6 h-6 text-accent-purple animate-spin absolute -bottom-2 -right-2 bg-surface p-1 rounded-full border border-surface-border" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-100">Indexing Storage</h2>
-                <p className="text-xs text-slate-400 font-mono mt-1 max-w-md truncate">
-                  {scanCount.toLocaleString()} items processed
-                </p>
-                <p className="text-[11px] text-slate-500 font-mono mt-0.5 max-w-lg truncate">
-                  {scanStatusPath}
-                </p>
-              </div>
-            </div>
-          ) : hasScanData ? (
+          hasScanData || isScanning ? (
             <AnalyzerPage
               flatNodes={flatNodes}
               currentId={currentId}
@@ -84,6 +63,9 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
               selectedNode={selectedNode}
               activeNode={activeNode}
               searchQuery={searchQuery}
+              isScanning={isScanning}
+              scanCount={scanCount}
+              scanStatusPath={scanStatusPath}
               onHoverNode={onHoverNode}
               onSelectNode={onSelectNode}
               onNavigate={onNavigate}
@@ -91,18 +73,11 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
               onCopyPath={onCopyPath}
             />
           ) : (
-            <WelcomeDashboard
-              onSelectFolder={onSelectFolder}
-              onScanPath={onScanPath}
-              isScanning={isScanning}
-            />
+            <WelcomeDashboard onScanPath={onScanPath} isScanning={isScanning} scanCount={scanCount} scanStatusPath={scanStatusPath} />
           )
         }
       />
-      <Route
-        path="/settings"
-        element={<SettingsPage onBackToAnalyzer={() => navigate('/')} />}
-      />
+      <Route path='/settings' element={<SettingsPage onBackToAnalyzer={() => navigate("/")} />} />
     </Routes>
   );
 };
