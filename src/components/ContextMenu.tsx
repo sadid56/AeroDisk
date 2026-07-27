@@ -1,16 +1,25 @@
-import React, { useEffect, useRef } from 'react';
-import { FolderOpen, ExternalLink, Trash2, Copy } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import {
+  FolderOpen,
+  ExternalLink,
+  Copy,
+  Trash2,
+  FolderPlus,
+  ShieldAlert,
+} from 'lucide-react';
 import { FileNode } from '../types';
 
 interface ContextMenuProps {
   x: number;
   y: number;
-  node: FileNode | null;
+  node: FileNode;
   onClose: () => void;
-  onNavigate: (nodeId: number) => void;
+  onNavigate: (id: number) => void;
   onReveal: (path: string) => void;
   onDelete: (node: FileNode) => void;
   onCopyPath: (path: string) => void;
+  onCreateSubfolder?: (node: FileNode) => void;
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -22,8 +31,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onReveal,
   onDelete,
   onCopyPath,
+  onCreateSubfolder,
 }) => {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const [isProtected, setIsProtected] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Check if item is a protected system directory
+    invoke<boolean>('check_is_protected_path', { targetPath: node.path })
+      .then((res) => setIsProtected(res))
+      .catch(() => setIsProtected(false));
+  }, [node.path]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -31,33 +49,50 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         onClose();
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => window.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
-  if (!node) return null;
-
-  // Adjust menu coordinates so it doesn't overflow screen boundaries
-  const adjustedX = Math.min(x, window.innerWidth - 190);
-  const adjustedY = Math.min(y, window.innerHeight - 170);
+  // Screen boundary positioning
+  const adjustedX = Math.min(x, window.innerWidth - 220);
+  const adjustedY = Math.min(y, window.innerHeight - 240);
 
   return (
     <div
       ref={menuRef}
       style={{ left: `${adjustedX}px`, top: `${adjustedY}px` }}
-      className="fixed z-50 w-48 bg-surface/95 backdrop-blur-xl border border-surface-border rounded-xl shadow-2xl p-1.5 text-xs text-slate-200 select-none animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-50 w-52 bg-surface/95 backdrop-blur-xl border border-surface-border rounded-xl shadow-2xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-100 text-xs select-none"
     >
+      <div className="px-2 py-1 border-b border-surface-border text-[11px] font-semibold text-slate-400 truncate">
+        {node.name}
+      </div>
+
       {node.isDirectory && (
-        <button
-          onClick={() => {
-            onNavigate(node.id);
-            onClose();
-          }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-accent-purple/20 hover:text-white transition-all font-medium text-left"
-        >
-          <FolderOpen className="w-4 h-4 text-accent-purple" />
-          <span>Open Directory</span>
-        </button>
+        <>
+          <button
+            onClick={() => {
+              onNavigate(node.id);
+              onClose();
+            }}
+            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
+          >
+            <FolderOpen className="w-4 h-4 text-accent-purple" />
+            <span>Open Folder</span>
+          </button>
+
+          {onCreateSubfolder && (
+            <button
+              onClick={() => {
+                onCreateSubfolder(node);
+                onClose();
+              }}
+              className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
+            >
+              <FolderPlus className="w-4 h-4 text-accent-purple" />
+              <span>Create Subfolder</span>
+            </button>
+          )}
+        </>
       )}
 
       <button
@@ -65,7 +100,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           onReveal(node.path);
           onClose();
         }}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-hover hover:text-white transition-all font-medium text-left"
+        className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
       >
         <ExternalLink className="w-4 h-4 text-accent-blue" />
         <span>Reveal in File Manager</span>
@@ -76,24 +111,31 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           onCopyPath(node.path);
           onClose();
         }}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-hover hover:text-white transition-all font-medium text-left"
+        className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
       >
-        <Copy className="w-4 h-4 text-accent-teal" />
+        <Copy className="w-4 h-4 text-accent-pink" />
         <span>Copy Path</span>
       </button>
 
       <div className="h-px bg-surface-border my-1" />
 
-      <button
-        onClick={() => {
-          onDelete(node);
-          onClose();
-        }}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition-all font-medium text-left"
-      >
-        <Trash2 className="w-4 h-4 text-rose-400" />
-        <span>Move to Trash</span>
-      </button>
+      {isProtected ? (
+        <div className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center gap-2 text-[11px] font-semibold">
+          <ShieldAlert className="w-4 h-4 shrink-0" />
+          <span>Protected System Path</span>
+        </div>
+      ) : (
+        <button
+          onClick={() => {
+            onDelete(node);
+            onClose();
+          }}
+          className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-all cursor-pointer font-medium"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span>Move to Trash</span>
+        </button>
+      )}
     </div>
   );
 };

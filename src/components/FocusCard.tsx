@@ -32,8 +32,8 @@ export const FocusCard: React.FC<FocusCardProps> = ({ node, onCopyPath }) => {
   return (
     <div className="bg-surface/80 border-t border-surface-border p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <div className="w-10 h-10 rounded-xl bg-background border border-surface-border flex items-center justify-center text-xl shrink-0 shadow-inner">
-          {category.icon}
+        <div className="w-10 h-10 rounded-xl bg-background border border-surface-border flex items-center justify-center shrink-0 shadow-inner">
+          <category.Icon className={`w-5 h-5 ${category.color}`} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

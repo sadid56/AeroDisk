@@ -48,11 +48,23 @@ fn reveal_target_item(target_path: String) -> Result<(), String> {
     trash::reveal_in_folder(&target_path)
 }
 
+#[tauri::command]
+fn create_new_folder(parent_path: String, folder_name: String) -> Result<String, String> {
+    trash::create_folder(&parent_path, &folder_name)
+}
+
+#[tauri::command]
+fn check_is_protected_path(target_path: String) -> bool {
+    trash::is_protected_system_path(&target_path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             scan_folder,
             get_disk_info,
@@ -60,7 +72,9 @@ pub fn run() {
             fetch_user_folders,
             get_home_folder,
             delete_target_item,
-            reveal_target_item
+            reveal_target_item,
+            create_new_folder,
+            check_is_protected_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

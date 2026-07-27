@@ -1,84 +1,165 @@
-import React from 'react';
-import { FolderOpen, Home, RefreshCw, Search, HardDrive, Zap } from 'lucide-react';
+import React, { useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { FolderOpen, Home, RefreshCw, Search, Zap, Settings, ArrowLeft, FolderPlus, LayoutGrid } from "lucide-react";
 
 interface HeaderProps {
   onSelectFolder: () => void;
+  onCreateFolder?: () => void;
   onHomeFolder: () => void;
+  onDashboard?: () => void;
   onRescan: () => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
+  onOpenSearchModal: () => void;
   isScanning: boolean;
   hasScanData: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onSelectFolder,
+  onCreateFolder,
   onHomeFolder,
+  onDashboard,
   onRescan,
-  searchQuery,
-  onSearchChange,
+  onOpenSearchModal,
   isScanning,
   hasScanData,
 }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isSettings = location.pathname === "/settings";
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        if (!isSettings) {
+          onOpenSearchModal();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onOpenSearchModal, isSettings]);
+
+
+
   return (
-    <header className="h-16 px-6 bg-surface/80 backdrop-blur-xl border-b border-surface-border flex items-center justify-between z-20 shrink-0">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-accent-purple via-accent-pink to-accent-blue flex items-center justify-center shadow-lg shadow-accent-purple/20">
-          <HardDrive className="w-5 h-5 text-white" />
-        </div>
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="font-bold text-base tracking-tight text-slate-100 font-sans">AeroDisk</h1>
-            <span className="px-2 py-0.5 text-[10px] font-semibold bg-accent-purple/15 text-accent-purple border border-accent-purple/30 rounded-full flex items-center gap-1">
-              <Zap className="w-2.5 h-2.5" /> Rust v2
-            </span>
+    <header
+      data-tauri-drag-region
+      className='h-16 px-6 bg-surface/80 backdrop-blur-xl border-b border-surface-border flex items-center justify-between z-20 shrink-0 select-none'
+    >
+      <div className='flex items-center gap-3' data-tauri-drag-region>
+        {/* Clickable Logo & Title for Quick Navigation */}
+        <button
+          onClick={() => {
+            navigate("/");
+            if (onDashboard) onDashboard();
+          }}
+          title='Go to Main Storage Dashboard'
+          className='flex items-center gap-3 hover:opacity-90 transition-opacity cursor-pointer text-left'
+        >
+          <img
+            src="/src/assets/favicon.png"
+            alt="AeroDisk Logo"
+            className="w-9 h-9 rounded-xl border border-surface-border shadow-md object-cover"
+          />
+          <div>
+            <div className='flex items-center gap-2'>
+              <h1 className='font-bold text-base tracking-tight font-sans'>AeroDisk</h1>
+              <span className='px-2 py-0.5 text-[10px] font-semibold bg-accent-purple/15 text-accent-purple border border-accent-purple/30 rounded-full flex items-center gap-1'>
+                <Zap className='w-2.5 h-2.5' /> Rust v2
+              </span>
+            </div>
+            <p className='text-[11px] opacity-70 font-medium'>Cross-Platform Storage Analyzer</p>
           </div>
-          <p className="text-[11px] text-slate-400 font-medium">Cross-Platform Storage Analyzer</p>
-        </div>
+        </button>
       </div>
 
-      <div className="flex items-center gap-3">
-        {hasScanData && (
-          <div className="relative w-56">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search items..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 bg-background/60 border border-surface-border rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-accent-purple/60 focus:ring-1 focus:ring-accent-purple/30 transition-all"
-            />
-          </div>
-        )}
-
-        <button
-          onClick={onHomeFolder}
-          disabled={isScanning}
-          title="Scan Home Directory"
-          className="p-2 rounded-lg bg-surface border border-surface-border text-slate-300 hover:text-white hover:bg-surface-hover hover:border-slate-700 disabled:opacity-50 transition-all"
-        >
-          <Home className="w-4 h-4" />
-        </button>
-
-        {hasScanData && (
+      <div className='flex items-center gap-3'>
+        {isSettings ? (
           <button
-            onClick={onRescan}
-            disabled={isScanning}
-            title="Rescan Directory"
-            className="p-2 rounded-lg bg-surface border border-surface-border text-slate-300 hover:text-white hover:bg-surface-hover hover:border-slate-700 disabled:opacity-50 transition-all"
+            onClick={() => navigate("/")}
+            className='px-4 py-2 rounded-lg bg-accent-purple/20 border border-accent-purple/40 text-accent-purple hover:bg-accent-purple/30 transition-all cursor-pointer font-medium text-xs flex items-center gap-2'
           >
-            <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin text-accent-purple' : ''}`} />
+            <ArrowLeft className='w-4 h-4' />
+            <span>Return to Analyzer</span>
           </button>
-        )}
+        ) : (
+          <>
+            {hasScanData && (
+              <button
+                onClick={onOpenSearchModal}
+                className='w-56 px-3 py-1.5 bg-background/60 border border-surface-border rounded-lg text-xs opacity-75 flex items-center justify-between hover:border-accent-purple/50 transition-all cursor-pointer'
+              >
+                <span className='flex items-center gap-2'>
+                  <Search className='w-3.5 h-3.5 text-accent-purple' />
+                  <span>Search items...</span>
+                </span>
+                <kbd className='px-1.5 py-0.5 rounded text-[10px] font-mono bg-surface border border-surface-border'>Ctrl+K</kbd>
+              </button>
+            )}
 
-        <button
-          onClick={onSelectFolder}
-          disabled={isScanning}
-          className="px-4 py-2 rounded-lg bg-gradient-to-r from-accent-purple to-accent-blue text-white font-medium text-xs shadow-md shadow-accent-purple/20 hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all flex items-center gap-2"
-        >
-          <FolderOpen className="w-4 h-4" />
-          <span>Choose Directory</span>
-        </button>
+            <button
+              onClick={() => {
+                navigate("/");
+                if (onDashboard) onDashboard();
+              }}
+              title='Main Storage Dashboard'
+              className='p-2 rounded-lg bg-surface border border-surface-border hover:bg-surface-hover transition-all cursor-pointer text-slate-200 hover:text-white'
+            >
+              <LayoutGrid className='w-4 h-4' />
+            </button>
+
+            <button
+              onClick={onHomeFolder}
+              disabled={isScanning}
+              title='Scan Home Directory'
+              className='p-2 rounded-lg bg-surface border border-surface-border hover:bg-surface-hover disabled:opacity-50 transition-all cursor-pointer text-slate-200 hover:text-white'
+            >
+              <Home className='w-4 h-4' />
+            </button>
+
+            {hasScanData && (
+              <>
+                <button
+                  onClick={onRescan}
+                  disabled={isScanning}
+                  title='Rescan Directory'
+                  className='p-2 rounded-lg bg-surface border border-surface-border hover:bg-surface-hover disabled:opacity-50 transition-all cursor-pointer text-slate-200 hover:text-white'
+                >
+                  <RefreshCw className={`w-4 h-4 ${isScanning ? "animate-spin text-accent-purple" : ""}`} />
+                </button>
+
+                {onCreateFolder && (
+                  <button
+                    onClick={onCreateFolder}
+                    disabled={isScanning}
+                    title='New Folder'
+                    className='p-2 rounded-lg bg-surface border border-surface-border hover:bg-surface-hover disabled:opacity-50 transition-all cursor-pointer text-accent-purple'
+                  >
+                    <FolderPlus className='w-4 h-4' />
+                  </button>
+                )}
+              </>
+            )}
+
+            <button
+              onClick={() => navigate("/settings")}
+              title='Application Settings'
+              className='p-2 rounded-lg bg-surface border border-surface-border hover:bg-surface-hover transition-all cursor-pointer text-slate-200 hover:text-white'
+            >
+              <Settings className='w-4 h-4' />
+            </button>
+
+            <button
+              onClick={onSelectFolder}
+              disabled={isScanning}
+              className='px-4 py-2 rounded-lg bg-gradient-to-r from-accent-purple to-accent-blue text-white font-medium text-xs shadow-md shadow-accent-purple/20 hover:brightness-110 active:scale-95 disabled:opacity-50 transition-all cursor-pointer flex items-center gap-2'
+            >
+              <FolderOpen className='w-4 h-4' />
+              <span>Choose Directory</span>
+            </button>
+          </>
+        )}
       </div>
     </header>
   );

@@ -1,3 +1,15 @@
+import {
+  Folder,
+  Image,
+  Film,
+  Archive,
+  Code2,
+  FileText,
+  Music,
+  File,
+  LucideIcon,
+} from 'lucide-react';
+
 export function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
@@ -10,26 +22,32 @@ export function truncate(str: string, n: number): string {
   return str.length > n ? str.slice(0, n - 1) + '…' : str;
 }
 
-export function getFileCategory(name: string, isDirectory: boolean): { icon: string; label: string; color: string } {
-  if (isDirectory) return { icon: '📁', label: 'Folder', color: 'text-amber-400' };
+export interface FileCategoryInfo {
+  Icon: LucideIcon;
+  label: string;
+  color: string;
+}
+
+export function getFileCategory(name: string, isDirectory: boolean): FileCategoryInfo {
+  if (isDirectory) return { Icon: Folder, label: 'Folder', color: 'text-amber-400' };
 
   const ext = name.split('.').pop()?.toLowerCase();
   switch (ext) {
     case 'png': case 'jpg': case 'jpeg': case 'webp': case 'gif': case 'svg': case 'ico':
-      return { icon: '🖼️', label: 'Image', color: 'text-pink-400' };
+      return { Icon: Image, label: 'Image', color: 'text-pink-400' };
     case 'mp4': case 'mkv': case 'mov': case 'avi': case 'webm':
-      return { icon: '🎥', label: 'Video', color: 'text-purple-400' };
+      return { Icon: Film, label: 'Video', color: 'text-purple-400' };
     case 'zip': case 'tar': case 'gz': case 'rar': case '7z': case 'dmg': case 'iso':
-      return { icon: '📦', label: 'Archive', color: 'text-red-400' };
+      return { Icon: Archive, label: 'Archive', color: 'text-red-400' };
     case 'js': case 'ts': case 'tsx': case 'jsx': case 'html': case 'css': case 'json':
     case 'py': case 'go': case 'rs': case 'cpp': case 'c': case 'java': case 'sh':
-      return { icon: '💻', label: 'Code', color: 'text-blue-400' };
+      return { Icon: Code2, label: 'Code', color: 'text-blue-400' };
     case 'pdf': case 'doc': case 'docx': case 'txt': case 'md': case 'csv': case 'xlsx':
-      return { icon: '📄', label: 'Document', color: 'text-emerald-400' };
+      return { Icon: FileText, label: 'Document', color: 'text-emerald-400' };
     case 'mp3': case 'wav': case 'flac': case 'm4a': case 'ogg':
-      return { icon: '🎵', label: 'Audio', color: 'text-teal-400' };
+      return { Icon: Music, label: 'Audio', color: 'text-teal-400' };
     default:
-      return { icon: '📄', label: 'File', color: 'text-slate-400' };
+      return { Icon: File, label: 'File', color: 'text-slate-400' };
   }
 }
 
@@ -40,7 +58,7 @@ export function getNodeColor(name: string, depth: number): string {
     hash |= 0;
   }
 
-  const hues = [265, 200, 310, 230, 280, 180, 330]; // Purples, teals, pinks, deep blues
+  const hues = [265, 200, 310, 230, 280, 180, 330];
   const baseHue = hues[Math.abs(hash) % hues.length];
   const hueOffset = (Math.abs(hash >> 3) % 20) - 10;
   const hue = (baseHue + hueOffset + 360) % 360;

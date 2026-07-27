@@ -12,6 +12,9 @@ dist-ssr/
 *.local
 .vite/
 
+# Temporary Scratch Scripts
+scratch/
+
 # Logs
 logs
 *.log

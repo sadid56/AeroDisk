@@ -1,5 +1,5 @@
-import React from 'react';
-import { MoreVertical } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { MoreVertical, Search } from 'lucide-react';
 import { FileNode } from '../types';
 import { formatBytes, getFileCategory } from '../utils/formatters';
 
@@ -15,6 +15,8 @@ interface FileListProps {
   onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
 }
 
+const MAX_SEARCH_RESULTS = 100;
+
 export const FileList: React.FC<FileListProps> = ({
   activeNode,
   flatNodes,
@@ -26,6 +28,39 @@ export const FileList: React.FC<FileListProps> = ({
   onNavigate,
   onContextMenu,
 }) => {
+  const isSearching = searchQuery.trim().length > 0;
+
+  // Optimized & Capped Search filtering to prevent UI hanging & memory spikes
+  const { displayChildren } = useMemo(() => {
+    if (!activeNode) return { displayChildren: [], totalMatches: 0 };
+
+    if (isSearching) {
+      const q = searchQuery.toLowerCase().trim();
+      const matches: FileNode[] = [];
+
+      for (let i = 0; i < flatNodes.length; i++) {
+        const node = flatNodes[i];
+        if (node && node.name && node.name.toLowerCase().includes(q)) {
+          matches.push(node);
+          if (matches.length >= MAX_SEARCH_RESULTS) {
+            break;
+          }
+        }
+      }
+
+      return { displayChildren: matches, totalMatches: matches.length };
+    }
+
+    if (Array.isArray(activeNode.childIds)) {
+      const children = activeNode.childIds
+        .map((id) => flatNodes[id])
+        .filter((n): n is FileNode => Boolean(n));
+      return { displayChildren: children, totalMatches: children.length };
+    }
+
+    return { displayChildren: [], totalMatches: 0 };
+  }, [activeNode, flatNodes, searchQuery, isSearching]);
+
   if (!activeNode) {
     return (
       <div className="flex-1 flex items-center justify-center p-6 text-slate-500 text-xs font-medium">
@@ -34,21 +69,10 @@ export const FileList: React.FC<FileListProps> = ({
     );
   }
 
-  // Get child nodes safely
-  let children: FileNode[] = [];
-  if (searchQuery.trim().length > 0) {
-    const q = searchQuery.toLowerCase();
-    children = flatNodes.filter((n) => n && n.name && n.name.toLowerCase().includes(q));
-  } else if (activeNode && Array.isArray(activeNode.childIds)) {
-    children = activeNode.childIds
-      .map((id) => flatNodes[id])
-      .filter((n): n is FileNode => Boolean(n));
-  }
-
-  if (children.length === 0) {
+  if (displayChildren.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center p-6 text-slate-500 text-xs font-medium">
-        This folder contains no items.
+        {isSearching ? `No matches found for "${searchQuery}"` : 'This folder contains no items.'}
       </div>
     );
   }
@@ -56,10 +80,21 @@ export const FileList: React.FC<FileListProps> = ({
   const maxParentSize = activeNode.size > 0 ? activeNode.size : 1;
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-surface-border">
-      <div className="divide-y divide-surface-border/50">
-        {children.map((child) => {
+    <div className="flex-1 flex flex-col min-h-0">
+      {isSearching && (
+        <div className="px-4 py-1.5 bg-accent-purple/10 border-b border-accent-purple/20 text-[11px] text-accent-purple font-medium flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <Search className="w-3 h-3" />
+            Showing top {displayChildren.length} search matches
+          </span>
+          <span className="text-[10px] text-slate-400">Limited for speed</span>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-scroll overflow-x-hidden scrollbar-stable divide-y divide-surface-border/50">
+        {displayChildren.map((child) => {
           const category = getFileCategory(child.name, child.isDirectory);
+          const Icon = category.Icon;
           const percentage = (child.size / maxParentSize) * 100;
           const isHovered = hoveredNode?.id === child.id;
           const isSelected = selectedNode?.id === child.id;
@@ -80,7 +115,7 @@ export const FileList: React.FC<FileListProps> = ({
                   : 'bg-transparent border-transparent hover:bg-surface/60'
               }`}
             >
-              <span className="text-base shrink-0">{category.icon}</span>
+              <Icon className={`w-4 h-4 shrink-0 ${category.color}`} />
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-1">

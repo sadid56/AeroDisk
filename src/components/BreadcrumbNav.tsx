@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight, Folder } from 'lucide-react';
+import { ChevronRight, Folder, ArrowLeft } from 'lucide-react';
 import { FileNode } from '../types';
 
 interface BreadcrumbNavProps {
@@ -15,8 +15,21 @@ export const BreadcrumbNav: React.FC<BreadcrumbNavProps> = ({
 }) => {
   if (breadcrumbIds.length === 0) return null;
 
+  const canGoBack = breadcrumbIds.length > 1;
+  const parentId = canGoBack ? breadcrumbIds[breadcrumbIds.length - 2] : null;
+
   return (
-    <div className="flex items-center gap-1 overflow-x-auto py-2 px-6 bg-surface/30 border-b border-surface-border scrollbar-none text-xs">
+    <div className="flex items-center gap-1.5 overflow-x-auto py-2 px-6 bg-surface/30 border-b border-surface-border scrollbar-none text-xs">
+      {canGoBack && parentId !== null && (
+        <button
+          onClick={() => onNavigate(parentId)}
+          title="Back to parent folder"
+          className="p-1.5 rounded-lg bg-surface border border-surface-border text-accent-purple hover:bg-surface-hover transition-all cursor-pointer mr-1 shrink-0"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+        </button>
+      )}
+
       {breadcrumbIds.map((id, index) => {
         const node = flatNodes[id];
         if (!node) return null;

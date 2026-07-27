@@ -10,9 +10,10 @@ interface SunburstChartProps {
   onNavigate: (nodeId: number) => void;
 }
 
-const RING_WIDTH = 52;
-const INNER_RADIUS = 48;
+const RING_WIDTH = 54;
+const INNER_RADIUS = 50;
 const MAX_DEPTH = 3;
+const GAP_ANGLE = 0.006; // Elegant subtle arc gap
 
 export const SunburstChart: React.FC<SunburstChartProps> = ({
   flatNodes,
@@ -46,24 +47,33 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
           const sweep = totalSweep * fraction;
           const childEnd = current + sweep;
 
-          const rInner = INNER_RADIUS + depth * RING_WIDTH;
-          const rOuter = rInner + RING_WIDTH - 2;
+          // Apply subtle gap between adjacent arcs
+          const adjustedStart = current + GAP_ANGLE / 2;
+          const adjustedEnd = childEnd - GAP_ANGLE / 2;
 
-          slices.push({
-            node: child,
-            depth,
-            startAngle: current,
-            endAngle: childEnd,
-            innerRadius: rInner,
-            outerRadius: rOuter,
-          });
+          if (adjustedEnd > adjustedStart) {
+            const rInner = INNER_RADIUS + depth * RING_WIDTH;
+            const rOuter = rInner + RING_WIDTH - 3;
 
-          recurse(child, depth + 1, current, childEnd);
+            slices.push({
+              node: child,
+              depth,
+              startAngle: adjustedStart,
+              endAngle: adjustedEnd,
+              innerRadius: rInner,
+              outerRadius: rOuter,
+            });
+          }
+
+          if (child.isDirectory && child.childIds && child.childIds.length > 0) {
+            recurse(child, depth + 1, current, childEnd);
+          }
+
           current = childEnd;
         }
       }
 
-      recurse(root, 0, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI);
+      recurse(root, 0, 0, Math.PI * 2);
       return slices;
     },
     [flatNodes]
@@ -89,15 +99,23 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
     // Draw Slices
     for (const slice of slices) {
       const isHovered = hoveredNode && hoveredNode.id === slice.node.id;
+      const outerR = isHovered ? slice.outerRadius + 7 : slice.outerRadius;
 
+      ctx.save();
       ctx.beginPath();
-      ctx.arc(cx, cy, slice.outerRadius, slice.startAngle, slice.endAngle, false);
+      ctx.arc(cx, cy, outerR, slice.startAngle, slice.endAngle, false);
       ctx.arc(cx, cy, slice.innerRadius, slice.endAngle, slice.startAngle, true);
       ctx.closePath();
 
-      if (hoveredNode && !isHovered) {
+      if (isHovered) {
+        ctx.shadowColor = '#8b5cf6';
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = getNodeColor(slice.node.name, slice.depth);
+      } else if (hoveredNode) {
+        ctx.shadowBlur = 0;
         ctx.fillStyle = 'rgba(18, 18, 23, 0.25)';
       } else {
+        ctx.shadowBlur = 0;
         ctx.fillStyle = getNodeColor(slice.node.name, slice.depth);
       }
 
@@ -108,43 +126,53 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
         ctx.lineWidth = 2;
         ctx.stroke();
       } else {
-        ctx.strokeStyle = 'rgba(9, 9, 11, 0.4)';
+        ctx.strokeStyle = 'rgba(9, 9, 11, 0.3)';
         ctx.lineWidth = 0.5;
         ctx.stroke();
       }
+      ctx.restore();
     }
 
-    // Center Hole Background
+    // Center Hole Background & Label (Theme Adaptive)
+    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim() || '#f8fafc';
+    const surfaceColor = getComputedStyle(document.documentElement).getPropertyValue('--surface-color').trim() || '#121217';
+
     ctx.beginPath();
-    ctx.arc(cx, cy, INNER_RADIUS - 2, 0, Math.PI * 2);
-    ctx.fillStyle = '#121217';
+    ctx.arc(cx, cy, INNER_RADIUS - 3, 0, Math.PI * 2);
+    ctx.fillStyle = surfaceColor;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = 'rgba(140, 140, 160, 0.25)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Center Label
+    // Center Display Card Info
     const displayNode = hoveredNode || rootNode;
-    ctx.fillStyle = '#f8fafc';
+    ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '600 12px Inter, sans-serif';
-    ctx.fillText(truncate(displayNode.name || '/', 12), cx, cy - 8);
+    ctx.fillText(truncate(displayNode.name || '/', 13), cx, cy - 10);
 
     ctx.fillStyle = '#a855f7';
     ctx.font = '700 11px JetBrains Mono, monospace';
-    ctx.fillText(formatBytes(displayNode.size), cx, cy + 10);
-  }, [rootNode, computeSlices, hoveredNode]);
+    ctx.fillText(formatBytes(displayNode.size), cx, cy + 8);
 
-  // Handle Resize and Canvas Setup
+    if (displayNode.isDirectory && displayNode.childIds) {
+      ctx.fillStyle = 'rgba(140, 140, 160, 0.6)';
+      ctx.font = '500 9px Inter, sans-serif';
+      ctx.fillText(`${displayNode.childIds.length} items`, cx, cy + 22);
+    }
+  }, [rootNode, hoveredNode, computeSlices]);
+
   useEffect(() => {
     const handleResize = () => {
       const container = containerRef.current;
       const canvas = canvasRef.current;
       if (!container || !canvas) return;
 
-      const size = Math.max(Math.min(container.clientWidth, container.clientHeight) - 20, 220);
       const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      const size = Math.min(rect.width, rect.height);
 
       canvas.width = size * dpr;
       canvas.height = size * dpr;
@@ -152,9 +180,8 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
       canvas.style.height = `${size}px`;
 
       const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.scale(dpr, dpr);
-      }
+      if (ctx) ctx.scale(dpr, dpr);
+
       drawChart();
     };
 
@@ -168,12 +195,7 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
   }, [drawChart]);
 
   const normalizeAngle = (angle: number): number => {
-    const start = -Math.PI / 2;
-    const twoPi = Math.PI * 2;
-    let a = angle;
-    while (a < start) a += twoPi;
-    while (a >= start + twoPi) a -= twoPi;
-    return a;
+    return angle < 0 ? angle + Math.PI * 2 : angle;
   };
 
   const getSliceFromEvent = (e: React.MouseEvent<HTMLCanvasElement>): Slice | null => {
@@ -221,7 +243,7 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
   if (!rootNode) return null;
 
   return (
-    <div ref={containerRef} className="w-full h-full flex items-center justify-center relative p-4">
+    <div ref={containerRef} className="w-full h-full flex items-center justify-center relative p-4 select-none">
       <canvas
         ref={canvasRef}
         onClick={handleClick}

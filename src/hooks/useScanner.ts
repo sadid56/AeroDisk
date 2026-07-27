@@ -112,6 +112,53 @@ export function useScanner() {
     });
   }, []);
 
+  const addFolderNode = useCallback((parentId: number, newPath: string, folderName: string): number => {
+    let newNodeId = 0;
+    setFlatNodes((prevNodes) => {
+      newNodeId = prevNodes.length;
+      const newNode: FileNode = {
+        id: newNodeId,
+        name: folderName,
+        path: newPath,
+        isDirectory: true,
+        size: 0,
+        childIds: [],
+        parentId: parentId,
+      };
+
+      const newNodes = [...prevNodes, newNode];
+
+      if (newNodes[parentId]) {
+        const parent = newNodes[parentId];
+        newNodes[parentId] = {
+          ...parent,
+          childIds: [...parent.childIds, newNodeId],
+        };
+      }
+
+      return newNodes;
+    });
+
+    return newNodeId;
+  }, []);
+
+  const resetToDashboard = useCallback(() => {
+    setFlatNodes([]);
+    setCurrentId(null);
+    setBreadcrumbIds([]);
+    setHoveredNode(null);
+    setSelectedNode(null);
+  }, []);
+
+  const navigateParent = useCallback(() => {
+    if (currentId !== null && flatNodes[currentId]) {
+      const parentId = flatNodes[currentId].parentId;
+      if (parentId !== null) {
+        navigateTo(parentId);
+      }
+    }
+  }, [currentId, flatNodes, navigateTo]);
+
   const activeNode = currentId !== null ? flatNodes[currentId] : null;
 
   return {
@@ -131,7 +178,10 @@ export function useScanner() {
     selectFolderDialog,
     scanHomeFolder,
     navigateTo,
+    navigateParent,
     removeNode,
+    addFolderNode,
+    resetToDashboard,
     activeNode,
   };
 }
