@@ -38,7 +38,7 @@ jobs:
           # macOS Universal / Apple Silicon & Intel (.dmg, .app.tar.gz)
           - platform: "macos-latest"
             args: "--target universal-apple-darwin"
-            target: "universal-apple-darwin"
+            target: "aarch64-apple-darwin"
 
     runs-on: ${{ matrix.platform }}
 
@@ -56,10 +56,14 @@ jobs:
         with:
           version: 9
 
-      - name: Install Rust Stable
+      - name: Install Rust Toolchain & Target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
+      - name: Add Extra macOS x86 Target for Universal Build
+        if: matrix.platform == 'macos-latest'
+        run: rustup target add x86_64-apple-darwin
 
       - name: Install Linux Build Dependencies
         if: matrix.platform == 'ubuntu-22.04'
