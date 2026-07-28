@@ -9,5 +9,17 @@
   "editor.quickSuggestions": {
     "strings": true
   },
-  "cSpell.words": ["aerodisk", "Rescan", "Sadid", "serde", "Subdirs", "sysinfo", "systempreferences", "tauri", "unlisten"]
+  "cSpell.words": [
+    "aerodisk",
+    "appimage",
+    "nsis",
+    "Rescan",
+    "Sadid",
+    "serde",
+    "Subdirs",
+    "sysinfo",
+    "systempreferences",
+    "tauri",
+    "unlisten"
+  ]
 }
