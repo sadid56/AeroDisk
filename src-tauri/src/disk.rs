@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+#[cfg(target_os = "linux")]
 use std::collections::HashSet;
 use std::env;
 use std::fs;
@@ -135,14 +136,17 @@ fn sysfs_removable(device: &str) -> Option<bool> {
     None
 }
 
+#[cfg(target_os = "linux")]
 fn read_trimmed_file(path: &Path) -> Option<String> {
     fs::read_to_string(path).ok().map(|value| value.trim().to_string())
 }
 
+#[cfg(target_os = "linux")]
 fn read_u64_file(path: &Path) -> Option<u64> {
     read_trimmed_file(path)?.parse::<u64>().ok()
 }
 
+#[cfg(target_os = "linux")]
 fn linux_device_total_space(device: &str) -> Option<u64> {
     let base = Path::new("/sys/class/block").join(device);
     let sectors = read_u64_file(&base.join("size"))?;
@@ -150,6 +154,7 @@ fn linux_device_total_space(device: &str) -> Option<u64> {
     Some(sectors.saturating_mul(block_size))
 }
 
+#[cfg(target_os = "linux")]
 fn linux_mount_info(device: &str) -> Option<(String, String)> {
     let mounts = fs::read_to_string("/proc/mounts").ok()?;
     let device_variants = [
@@ -171,6 +176,7 @@ fn linux_mount_info(device: &str) -> Option<(String, String)> {
     None
 }
 
+#[cfg(target_os = "linux")]
 fn linux_existing_device_names(drives: &[SystemDrive]) -> HashSet<String> {
     drives
         .iter()
@@ -193,6 +199,7 @@ fn linux_existing_device_names(drives: &[SystemDrive]) -> HashSet<String> {
         .filter(|value| !value.is_empty())
         .collect()
 }
+
 
 #[cfg(target_os = "linux")]
 fn collect_linux_removable_drives(drives: &mut Vec<SystemDrive>) {

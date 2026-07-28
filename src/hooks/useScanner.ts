@@ -125,6 +125,7 @@ export function useScanner() {
         const unlistenProgress = await listen<ProgressPayload>("scan-progress", (event) => {
           if (event.payload.scanId !== activeScanIdRef.current) return;
           setScanStatusPath(event.payload.path);
+          setScanCount(event.payload.count);
         });
 
         const unlistenDelta = await listen<ScanDeltaPayload>("scan-delta", (event) => {

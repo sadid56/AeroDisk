@@ -26,7 +26,7 @@ async fn scan_folder(
     let cache_ref = cache.inner().clone();
     tokio::task::spawn_blocking(move || {
         let mut scanner = Scanner::new();
-        scanner.scan(&target_path, Some(&app), Some(&cache_ref))
+        scanner.scan(&target_path, Some(&app), Some(&cache_ref), None)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -104,8 +104,84 @@ fn create_new_folder(parent_path: String, folder_name: String) -> Result<String,
 }
 
 #[tauri::command]
+fn open_in_terminal(target_path: String) -> Result<(), String> {
+    let dir_path = {
+        let p = std::path::Path::new(&target_path);
+        if p.is_dir() {
+            target_path.clone()
+        } else {
+            p.parent()
+                .map(|pp| pp.to_string_lossy().to_string())
+                .unwrap_or(target_path.clone())
+        }
+    };
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-a", "Terminal", &dir_path])
+            .spawn()
+            .map_err(|e| format!("Failed to open Terminal: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "cmd", "/k", &format!("cd /d \"{}\"", dir_path)])
+            .spawn()
+            .map_err(|e| format!("Failed to open terminal: {}", e))?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("x-terminal-emulator")
+            .current_dir(&dir_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open terminal: {}", e))?;
+        Ok(())
+    }
+}
+
+#[tauri::command]
 fn check_is_protected_path(target_path: String) -> bool {
     trash::is_protected_system_path(&target_path)
+}
+
+#[tauri::command]
+fn check_full_disk_access() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            let path = std::path::Path::new(&home).join("Library/Mail");
+            match std::fs::read_dir(path) {
+                Ok(_) => true,
+                Err(err) => err.kind() != std::io::ErrorKind::PermissionDenied,
+            }
+        } else {
+            false
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
+#[tauri::command]
+fn request_full_disk_access(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri_plugin_opener::OpenerExt;
+        let url = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
+        app.opener().open_url(url, None::<String>).map_err(|e| e.to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Ok(())
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -128,7 +204,10 @@ pub fn run() {
             delete_target_item,
             reveal_target_item,
             create_new_folder,
-            check_is_protected_path
+            check_is_protected_path,
+            check_full_disk_access,
+            request_full_disk_access,
+            open_in_terminal
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

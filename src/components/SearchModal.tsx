@@ -13,7 +13,7 @@ interface SearchModalProps {
 
 const MAX_SEARCH_RESULTS = 80;
 
-export const SearchModal: React.FC<SearchModalProps> = ({
+export const SearchModal: React.FC<SearchModalProps> = React.memo(({
   isOpen,
   onClose,
   flatNodes,
@@ -183,4 +183,4 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -26,7 +26,7 @@ interface AnalyzerPageProps {
   onCopyPath: () => void;
 }
 
-export const AnalyzerPage: React.FC<AnalyzerPageProps> = ({
+export const AnalyzerPage: React.FC<AnalyzerPageProps> = React.memo(({
   flatNodes,
   currentId,
   breadcrumbIds,
@@ -80,7 +80,6 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = ({
       />
 
       <div className="flex-1 grid grid-cols-1 md:grid-cols-12 min-h-0 border-b border-surface-border">
-        {/* Interactive Canvas Sunburst Chart */}
         <div className="md:col-span-6 lg:col-span-7 bg-surface/20 border-r border-surface-border flex flex-col items-center justify-center min-h-[300px] relative">
           <SunburstChart
             flatNodes={flatNodes}
@@ -92,7 +91,6 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = ({
           />
         </div>
 
-        {/* High-Performance Paginated File List Table */}
         <div className="md:col-span-6 lg:col-span-5 flex flex-col bg-surface/30 min-h-[300px]">
           <div className="px-4 py-2 bg-surface/60 border-b border-surface-border text-[11px] font-bold text-slate-400 uppercase tracking-wider flex justify-between">
             <span>Contents</span>
@@ -119,4 +117,4 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = ({
       />
     </div>
   );
-};
+});

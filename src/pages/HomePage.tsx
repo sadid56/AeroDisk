@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { HardDrive, Folder, RefreshCw, Usb, HardDriveDownload } from "lucide-react";
-import { SystemDrive, UserFolder } from "../types";
+import React, { useCallback } from "react";
+import { HardDrive, Folder, RefreshCw, Usb, HardDriveDownload, ShieldAlert, ExternalLink } from "lucide-react";
 import { formatBytes } from "../utils/formatters";
+import { showToast } from "../providers/ToastProvider";
+import { useSystemDrives } from "../hooks/useSystemDrives";
+import { useFullDiskAccess } from "../hooks/useFullDiskAccess";
 
-interface WelcomeDashboardProps {
+interface HomePageProps {
   onScanPath: (path: string) => void;
   isScanning: boolean;
   scanCount: number;
@@ -30,35 +31,34 @@ const DriveCardSkeleton = () => (
   </div>
 );
 
-export const WelcomeDashboard: React.FC<WelcomeDashboardProps> = ({ onScanPath, isScanning, scanCount, scanStatusPath }) => {
-  const [drives, setDrives] = useState<SystemDrive[]>([]);
-  const [folders, setFolders] = useState<UserFolder[]>([]);
-  const [loading, setLoading] = useState(true);
+export const HomePage: React.FC<HomePageProps> = React.memo(({ onScanPath, isScanning, scanCount, scanStatusPath }) => {
+  const { drives, folders, loading, refetch } = useSystemDrives();
+  const { hasFDA, checkFDA, requestFDA } = useFullDiskAccess();
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [fetchedDrives, fetchedFolders] = await Promise.all([
-        invoke<SystemDrive[]>("fetch_system_drives"),
-        invoke<UserFolder[]>("fetch_user_folders"),
-      ]);
-      setDrives(fetchedDrives || []);
-      setFolders(fetchedFolders || []);
-    } catch (err) {
-      console.error("Failed to fetch system drives or user folders:", err);
-    } finally {
-      setLoading(false);
+  const handleRequestFDA = useCallback(async () => {
+    await requestFDA();
+  }, [requestFDA]);
+
+  const handleCheckStatus = useCallback(async () => {
+    const allowed = await checkFDA();
+    if (allowed) {
+      showToast({
+        message: "Access Granted",
+        description: "Full Disk Access has been successfully enabled. Scanning will now run at maximum speed.",
+        type: "success",
+      });
+    } else {
+      showToast({
+        message: "Status Checked",
+        description: "Full Disk Access is not yet enabled. Please enable it in macOS System Settings.",
+        type: "warning",
+      });
     }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  }, [checkFDA]);
 
   return (
     <div className='flex-1 flex flex-col items-center justify-start p-6 sm:p-8 overflow-y-auto bg-background'>
       <div className='max-w-5xl w-full space-y-10'>
-        {/* Scanning progress pill – subtle but present */}
         {isScanning && (
           <div className='sticky top-0 z-10 mb-1 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-surface-hover/70 backdrop-blur-md border border-slate-500/30 text-sm text-slate-200 shadow-sm'>
             <span className='relative flex h-3 w-3 shrink-0'>
@@ -72,7 +72,6 @@ export const WelcomeDashboard: React.FC<WelcomeDashboardProps> = ({ onScanPath, 
           </div>
         )}
 
-        {/* Header – minimal, welcoming */}
         <div className='space-y-1'>
           <div className='w-10 h-10 rounded-xl bg-surface border border-surface-border flex items-center justify-center text-accent-purple mb-3 shadow-sm'>
             <HardDriveDownload className='w-5 h-5' />
@@ -80,12 +79,43 @@ export const WelcomeDashboard: React.FC<WelcomeDashboardProps> = ({ onScanPath, 
           <p className='text-sm text-slate-400'>Choose a drive or folder to scan and reclaim disk space.</p>
         </div>
 
-        {/* Drives Section */}
+        {!hasFDA && (
+          <div className='relative overflow-hidden rounded-2xl border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 transition-all p-4.5 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between shadow-[0_8px_32px_0_rgba(245,158,11,0.03)] backdrop-blur-md'>
+            <div className='flex gap-3.5 items-start sm:items-center'>
+              <div className='w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 shadow-sm'>
+                <ShieldAlert className='w-4.5 h-4.5' />
+              </div>
+              <div className='space-y-0.5'>
+                <h4 className='text-sm font-semibold text-amber-200'>Full Disk Access Required (macOS)</h4>
+                <p className='text-xs text-slate-400 max-w-2xl leading-relaxed'>
+                  Without this permission, scanning is significantly slower (due to OS sandboxing checks) and will trigger repetitive
+                  prompts for each folder. Enable it to get super-fast 1-2s scans.
+                </p>
+              </div>
+            </div>
+            <div className='flex gap-2.5 shrink-0 w-full sm:w-auto mt-2 sm:mt-0'>
+              <button
+                onClick={handleRequestFDA}
+                className='flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 transition-colors shadow-sm cursor-pointer'
+              >
+                Grant Access
+                <ExternalLink className='w-3.5 h-3.5' />
+              </button>
+              <button
+                onClick={handleCheckStatus}
+                className='flex-1 sm:flex-initial flex items-center justify-center px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-surface border border-surface-border text-slate-200 hover:bg-surface-hover hover:border-slate-500 transition-colors cursor-pointer'
+              >
+                Check Status
+              </button>
+            </div>
+          </div>
+        )}
+
         <section>
           <div className='flex items-center justify-between mb-4'>
             <h3 className='text-xs font-semibold uppercase tracking-[0.1em] text-slate-500'>Drives</h3>
             <button
-              onClick={loadData}
+              onClick={refetch}
               disabled={loading}
               className='flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-200 disabled:opacity-50 transition-colors px-2.5 py-1 rounded-lg hover:bg-surface'
             >
@@ -153,7 +183,6 @@ export const WelcomeDashboard: React.FC<WelcomeDashboardProps> = ({ onScanPath, 
           </div>
         </section>
 
-        {/* Quick Access Folders */}
         {(folders.length > 0 || loading) && (
           <section>
             <h3 className='text-xs font-semibold uppercase tracking-[0.1em] text-slate-500 mb-4'>Quick access</h3>
@@ -192,4 +221,4 @@ export const WelcomeDashboard: React.FC<WelcomeDashboardProps> = ({ onScanPath, 
       </div>
     </div>
   );
-};
+});

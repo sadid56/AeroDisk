@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import React, { useEffect, useRef } from 'react';
+import { useProtectedPath } from '../hooks/useProtectedPath';
 import {
   FolderOpen,
   ExternalLink,
@@ -7,6 +7,7 @@ import {
   Trash2,
   FolderPlus,
   ShieldAlert,
+  Terminal,
 } from 'lucide-react';
 import { FileNode } from '../types';
 
@@ -20,9 +21,10 @@ interface ContextMenuProps {
   onDelete: (node: FileNode) => void;
   onCopyPath: (path: string) => void;
   onCreateSubfolder?: (node: FileNode) => void;
+  onOpenInTerminal: (path: string) => void;
 }
 
-export const ContextMenu: React.FC<ContextMenuProps> = ({
+export const ContextMenu: React.FC<ContextMenuProps> = React.memo(({
   x,
   y,
   node,
@@ -32,16 +34,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onDelete,
   onCopyPath,
   onCreateSubfolder,
+  onOpenInTerminal,
 }) => {
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [isProtected, setIsProtected] = useState<boolean>(false);
-
-  useEffect(() => {
-    // Check if item is a protected system directory
-    invoke<boolean>('check_is_protected_path', { targetPath: node.path })
-      .then((res) => setIsProtected(res))
-      .catch(() => setIsProtected(false));
-  }, [node.path]);
+  const { isProtected } = useProtectedPath(node.path);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -53,9 +49,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     return () => window.removeEventListener('mousedown', handleClickOutside);
   }, [onClose]);
 
-  // Screen boundary positioning
   const adjustedX = Math.min(x, window.innerWidth - 220);
-  const adjustedY = Math.min(y, window.innerHeight - 240);
+  const adjustedY = Math.min(y, window.innerHeight - 280);
 
   return (
     <div
@@ -108,6 +103,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
       <button
         onClick={() => {
+          onOpenInTerminal(node.path);
+          onClose();
+        }}
+        className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
+      >
+        <Terminal className="w-4 h-4 text-emerald-400" />
+        <span>Open in Terminal</span>
+      </button>
+
+      <button
+        onClick={() => {
           onCopyPath(node.path);
           onClose();
         }}
@@ -138,4 +144,4 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
       )}
     </div>
   );
-};
+});

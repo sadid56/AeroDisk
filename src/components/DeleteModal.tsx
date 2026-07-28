@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import React from 'react';
+import { useProtectedPath } from '../hooks/useProtectedPath';
 import { AlertTriangle, Trash2, Loader2, ShieldAlert } from 'lucide-react';
 import { FileNode } from '../types';
 
@@ -10,21 +10,13 @@ interface DeleteModalProps {
   isDeleting: boolean;
 }
 
-export const DeleteModal: React.FC<DeleteModalProps> = ({
+export const DeleteModal: React.FC<DeleteModalProps> = React.memo(({
   node,
   onConfirm,
   onCancel,
   isDeleting,
 }) => {
-  const [isProtected, setIsProtected] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (node) {
-      invoke<boolean>('check_is_protected_path', { targetPath: node.path })
-        .then((res) => setIsProtected(res))
-        .catch(() => setIsProtected(false));
-    }
-  }, [node]);
+  const { isProtected } = useProtectedPath(node?.path);
 
   if (!node) return null;
 
@@ -93,4 +85,4 @@ export const DeleteModal: React.FC<DeleteModalProps> = ({
       </div>
     </div>
   );
-};
+});

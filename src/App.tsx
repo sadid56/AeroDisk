@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useNavigate } from "react-router-dom";
 import { useScanner } from "./hooks/useScanner";
@@ -11,11 +11,12 @@ import { SearchModal } from "./components/SearchModal";
 import { ToastProvider, showToast } from "./providers/ToastProvider";
 import { AppRoutes } from "./routes/AppRoutes";
 import { useAutoUpdater } from "./hooks/useAutoUpdater";
+import { UpdateModal } from "./components/UpdateModal";
 import { applyThemeMode, applyFont, ThemeMode } from "./pages/SettingsPage";
 import { FileNode } from "./types";
 
 export const App: React.FC = () => {
-  useAutoUpdater();
+  const updater = useAutoUpdater();
   const {
     flatNodes,
     currentId,
@@ -54,7 +55,7 @@ export const App: React.FC = () => {
     if (savedFont) applyFont(savedFont);
   }, []);
 
-  const handleScanPath = async (path: string) => {
+  const handleScanPath = useCallback(async (path: string) => {
     try {
       navigate("/");
       if (path.startsWith("~")) {
@@ -67,22 +68,30 @@ export const App: React.FC = () => {
     } catch (err: any) {
       showToast({ message: "Scan Error", description: err?.message || String(err), type: "error" });
     }
-  };
+  }, [navigate, startScan]);
 
-  const handleContextMenu = (e: React.MouseEvent, node: FileNode) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, node });
-  };
+  }, []);
 
-  const handleReveal = async (path: string) => {
+  const handleReveal = useCallback(async (path: string) => {
     try {
       await invoke("reveal_target_item", { targetPath: path });
     } catch (err: any) {
       showToast({ message: "Reveal Failed", description: err || "Could not open file manager", type: "error" });
     }
-  };
+  }, []);
 
-  const handleConfirmDelete = async () => {
+  const handleOpenInTerminal = useCallback(async (path: string) => {
+    try {
+      await invoke("open_in_terminal", { targetPath: path });
+    } catch (err: any) {
+      showToast({ message: "Terminal Failed", description: err || "Could not open terminal", type: "error" });
+    }
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
     if (!pendingDeleteNode) return;
     setIsDeleting(true);
 
@@ -105,31 +114,101 @@ export const App: React.FC = () => {
       setIsDeleting(false);
       setPendingDeleteNode(null);
     }
-  };
+  }, [pendingDeleteNode, removeNode, currentId, navigateTo, rootPath, refreshDiskInfo]);
+
+  const handleSelectFolder = useCallback(() => {
+    navigate("/");
+    selectFolderDialog();
+  }, [navigate, selectFolderDialog]);
+
+  const handleDashboard = useCallback(() => {
+    resetToDashboard();
+  }, [resetToDashboard]);
+
+  const handleCreateFolder = useCallback(() => {
+    if (activeNode) {
+      setCreateFolderTarget(activeNode);
+    }
+  }, [activeNode]);
+
+  const handleRescan = useCallback(() => {
+    rootPath && startScan(rootPath);
+  }, [rootPath, startScan]);
+
+  const handleOpenSearchModal = useCallback(() => {
+    setIsSearchOpen(true);
+  }, []);
+
+  const handleCloseSearchModal = useCallback(() => {
+    setIsSearchOpen(false);
+  }, []);
+
+  const handleHoverNode = useCallback((node: FileNode | null) => {
+    setHoveredNode(node);
+  }, [setHoveredNode]);
+
+  const handleSelectNode = useCallback((node: FileNode | null) => {
+    setSelectedNode(node);
+  }, [setSelectedNode]);
+
+  const handleNavigateTo = useCallback((id: number) => {
+    navigateTo(id);
+  }, [navigateTo]);
+
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handlePendingDelete = useCallback((node: FileNode) => {
+    setPendingDeleteNode(node);
+  }, []);
+
+  const handleCreateSubfolder = useCallback((node: FileNode) => {
+    setCreateFolderTarget(node);
+  }, []);
+
+  const handleCopyPathClipboard = useCallback((path: string) => {
+    navigator.clipboard.writeText(path);
+    showToast({ message: "Copied", description: "Path copied to clipboard", type: "success" });
+  }, []);
+
+  const handleCopyPathNotification = useCallback(() => {
+    showToast({ message: "Copied", description: "Path copied to clipboard", type: "success" });
+  }, []);
+
+  const handleCancelDelete = useCallback(() => {
+    setPendingDeleteNode(null);
+  }, []);
+
+  const handleCloseCreateFolder = useCallback(() => {
+    setCreateFolderTarget(null);
+  }, []);
+
+  const handleFolderCreated = useCallback((newPath: string, folderName: string) => {
+    if (createFolderTarget) {
+      addFolderNode(createFolderTarget.id, newPath, folderName);
+    }
+  }, [createFolderTarget, addFolderNode]);
 
   const hasScanData = flatNodes.length > 0;
+
+  useEffect(() => {
+    const suppressContextMenu = (e: MouseEvent) => e.preventDefault();
+    window.addEventListener('contextmenu', suppressContextMenu);
+    return () => window.removeEventListener('contextmenu', suppressContextMenu);
+  }, []);
 
   return (
     <div className='h-screen w-screen flex flex-col bg-background bg-glow overflow-hidden font-sans text-slate-100'>
       <Header
-        onSelectFolder={() => {
-          navigate("/");
-          selectFolderDialog();
-        }}
-        onDashboard={() => {
-          resetToDashboard();
-        }}
-        onCreateFolder={() => {
-          if (activeNode) {
-            setCreateFolderTarget(activeNode);
-          }
-        }}
-        onRescan={() => {
-          rootPath && startScan(rootPath);
-        }}
-        onOpenSearchModal={() => setIsSearchOpen(true)}
+        onSelectFolder={handleSelectFolder}
+        onDashboard={handleDashboard}
+        onCreateFolder={handleCreateFolder}
+        onRescan={handleRescan}
+        onOpenSearchModal={handleOpenSearchModal}
         isScanning={isScanning}
         hasScanData={hasScanData}
+        updateAvailable={updater.updateAvailable}
       />
 
       <AppRoutes
@@ -145,12 +224,13 @@ export const App: React.FC = () => {
         selectedNode={selectedNode}
         activeNode={activeNode}
         searchQuery={searchQuery}
-        onHoverNode={setHoveredNode}
-        onSelectNode={setSelectedNode}
-        onNavigate={navigateTo}
+        onHoverNode={handleHoverNode}
+        onSelectNode={handleSelectNode}
+        onNavigate={handleNavigateTo}
         onContextMenu={handleContextMenu}
-        onCopyPath={() => showToast({ message: "Copied", description: "Path copied to clipboard", type: "success" })}
+        onCopyPath={handleCopyPathNotification}
         onScanPath={handleScanPath}
+        updater={updater}
       />
 
       {contextMenu && (
@@ -158,42 +238,46 @@ export const App: React.FC = () => {
           x={contextMenu.x}
           y={contextMenu.y}
           node={contextMenu.node}
-          onClose={() => setContextMenu(null)}
-          onNavigate={navigateTo}
+          onClose={handleCloseContextMenu}
+          onNavigate={handleNavigateTo}
           onReveal={handleReveal}
-          onDelete={(node) => setPendingDeleteNode(node)}
-          onCreateSubfolder={(node) => setCreateFolderTarget(node)}
-          onCopyPath={(path) => {
-            navigator.clipboard.writeText(path);
-            showToast({ message: "Copied", description: "Path copied to clipboard", type: "success" });
-          }}
+          onDelete={handlePendingDelete}
+          onCreateSubfolder={handleCreateSubfolder}
+          onCopyPath={handleCopyPathClipboard}
+          onOpenInTerminal={handleOpenInTerminal}
         />
       )}
 
       <DeleteModal
         node={pendingDeleteNode}
         onConfirm={handleConfirmDelete}
-        onCancel={() => setPendingDeleteNode(null)}
+        onCancel={handleCancelDelete}
         isDeleting={isDeleting}
       />
 
       <CreateFolderModal
         isOpen={Boolean(createFolderTarget)}
         parentFolder={createFolderTarget}
-        onClose={() => setCreateFolderTarget(null)}
-        onFolderCreated={(newPath, folderName) => {
-          if (createFolderTarget) {
-            addFolderNode(createFolderTarget.id, newPath, folderName);
-          }
-        }}
+        onClose={handleCloseCreateFolder}
+        onFolderCreated={handleFolderCreated}
       />
 
       <SearchModal
         isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
+        onClose={handleCloseSearchModal}
         flatNodes={flatNodes}
-        onNavigate={navigateTo}
-        onSelectNode={setSelectedNode}
+        onNavigate={handleNavigateTo}
+        onSelectNode={handleSelectNode}
+      />
+
+      <UpdateModal
+        isOpen={updater.showModal}
+        version={updater.updateInfo?.version || ""}
+        body={updater.updateInfo?.body}
+        installing={updater.installing}
+        progressPercent={updater.progressPercent}
+        onConfirm={updater.startUpdate}
+        onSkip={updater.skipUpdate}
       />
 
       <ToastProvider />

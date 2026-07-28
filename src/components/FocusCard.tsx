@@ -8,7 +8,7 @@ interface FocusCardProps {
   onCopyPath?: (path: string) => void;
 }
 
-export const FocusCard: React.FC<FocusCardProps> = ({ node, onCopyPath }) => {
+export const FocusCard: React.FC<FocusCardProps> = React.memo(({ node, onCopyPath }) => {
   const [copied, setCopied] = React.useState(false);
 
   if (!node) {
@@ -76,4 +76,4 @@ export const FocusCard: React.FC<FocusCardProps> = ({ node, onCopyPath }) => {
       </div>
     </div>
   );
-};
+});

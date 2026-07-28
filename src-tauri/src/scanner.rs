@@ -1,6 +1,5 @@
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -105,21 +104,6 @@ impl ScanCache {
     }
 }
 
-struct StreamSession {
-    scan_id: String,
-    app: AppHandle,
-    last_emit: Instant,
-}
-
-impl StreamSession {
-    fn new(scan_id: String, app: AppHandle) -> Self {
-        Self {
-            scan_id,
-            app,
-            last_emit: Instant::now(),
-        }
-    }
-}
 
 // ─── Scanner ────────────────────────────────────────────────────────────────
 
@@ -135,6 +119,7 @@ impl Scanner {
         target_path: &str,
         app: Option<&AppHandle>,
         cache: Option<&ScanCache>,
+        scan_id: Option<&str>,
     ) -> Result<Vec<FileNode>, String> {
         let root_path = Path::new(target_path);
         if !root_path.exists() {
@@ -154,6 +139,8 @@ impl Scanner {
             app_clone.as_ref(),
             total_start,
             &last_emit_ms,
+            scan_id,
+            root_path,
         );
         let _walk_ms = walk_start.elapsed();
 
@@ -187,292 +174,92 @@ impl Scanner {
             return Err(format!("Target path does not exist: {}", target_path));
         }
 
-        let mut session = StreamSession::new(scan_id.clone(), app.clone());
-        let mut nodes: Vec<FileNode> = Vec::new();
-        let mut dirty_ids: HashSet<usize> = HashSet::new();
-        let mut pending_added: Vec<FileNode> = Vec::new();
-        let mut progress = 0usize;
+        // Run the optimized parallel scanner!
+        let nodes = self.scan(target_path, Some(app), cache, Some(&scan_id))?;
+        let total_count = nodes.len();
 
-        let mut dir_stack: Vec<usize> = Vec::new();
+        // Send the scanned tree in chunks to avoid Webview IPC payload size limitations and memory crashes
+        let chunk_size = 10000;
+        let mut chunks = nodes.chunks(chunk_size);
 
-        self.walk_streaming(
-            root_path,
-            None,
-            &mut nodes,
-            &mut pending_added,
-            &mut dirty_ids,
-            &mut progress,
-            &mut session,
-            &mut dir_stack,
-        )?;
-
-        let root_path_str = root_path.to_string_lossy().into_owned();
-
-        self.maybe_flush_stream(
-            &mut session,
-            &nodes,
-            &mut pending_added,
-            &mut dirty_ids,
-            progress,
-            &root_path_str,
-            true,
-        )?;
-
-        if let Some(c) = cache {
-            let paths = nodes.iter().map(|node| node.path.clone()).collect();
-            c.store_paths(paths);
+        while let Some(chunk) = chunks.next() {
+            let _ = app.emit(
+                "scan-delta",
+                ScanDeltaPayload {
+                    scan_id: scan_id.clone(),
+                    added: chunk.to_vec(),
+                    updated: Vec::new(),
+                    path: target_path.to_string(),
+                    count: total_count,
+                    done: false,
+                },
+            );
+            std::thread::sleep(Duration::from_millis(2));
         }
 
-        let _ = session.app.emit(
+        // Send a final empty payload with done = true to trigger the final flush
+        let _ = app.emit(
+            "scan-delta",
+            ScanDeltaPayload {
+                scan_id: scan_id.clone(),
+                added: Vec::new(),
+                updated: Vec::new(),
+                path: target_path.to_string(),
+                count: total_count,
+                done: true,
+            },
+        );
+
+        let _ = app.emit(
             "scan-complete",
             ScanCompletePayload {
                 scan_id,
-                count: nodes.len(),
-                total_nodes: nodes.len(),
+                count: total_count,
+                total_nodes: total_count,
             },
         );
 
         Ok(())
     }
 
-    fn walk_streaming(
-        &mut self,
-        dir: &Path,
-        parent_id: Option<usize>,
-        nodes: &mut Vec<FileNode>,
-        pending_added: &mut Vec<FileNode>,
-        dirty_ids: &mut HashSet<usize>,
-        progress: &mut usize,
-        session: &mut StreamSession,
-        dir_stack: &mut Vec<usize>,
-    ) -> Result<u64, String> {
-        let dir_id = nodes.len();
-        let dir_path = dir.to_string_lossy().into_owned();
-        let name = dir
-            .file_name()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| dir_path.clone());
-
-        nodes.push(FileNode {
-            id: dir_id,
-            name,
-            path: dir_path.clone(),
-            is_directory: true,
-            size: 0,
-            child_ids: Vec::new(),
-            parent_id,
-        });
-        pending_added.push(nodes[dir_id].clone());
-
-        if let Some(pid) = parent_id {
-            if let Some(parent) = nodes.get_mut(pid) {
-                parent.child_ids.push(dir_id);
-                dirty_ids.insert(pid);
-            }
-        }
-
-        dir_stack.push(dir_id);
-        self.maybe_flush_stream(
-            session,
-            nodes,
-            pending_added,
-            dirty_ids,
-            *progress,
-            &dir_path,
-            false,
-        )?;
-
-        let entries: Vec<fs::DirEntry> = match fs::read_dir(dir) {
-            Ok(rd) => rd.flatten().collect(),
-            Err(_err) => {
-                // Ignore unreadable directories and continue scanning the rest.
-                dir_stack.pop();
-                dirty_ids.insert(dir_id);
-                self.maybe_flush_stream(
-                    session,
-                    nodes,
-                    pending_added,
-                    dirty_ids,
-                    *progress,
-                    &dir_path,
-                    false,
-                )?;
-                return Ok(nodes[dir_id].size);
-            }
-        };
-
-        for entry in entries {
-            let ft = match entry.file_type() {
-                Ok(ft) => ft,
-                Err(_) => continue,
-            };
-
-            if ft.is_symlink() {
-                continue;
-            }
-
-            let entry_path = entry.path();
-            let entry_name = entry.file_name().to_string_lossy().into_owned();
-
-            if ft.is_dir() {
-                self.walk_streaming(
-                    &entry_path,
-                    Some(dir_id),
-                    nodes,
-                    pending_added,
-                    dirty_ids,
-                    progress,
-                    session,
-                    dir_stack,
-                )?;
-                self.maybe_flush_stream(
-                    session,
-                    nodes,
-                    pending_added,
-                    dirty_ids,
-                    *progress,
-                    &entry_path.to_string_lossy(),
-                    false,
-                )?;
-            } else if ft.is_file() {
-                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-                let file_id = nodes.len();
-                nodes.push(FileNode {
-                    id: file_id,
-                    name: entry_name,
-                    path: entry_path.to_string_lossy().into_owned(),
-                    is_directory: false,
-                    size,
-                    child_ids: Vec::new(),
-                    parent_id: Some(dir_id),
-                });
-                pending_added.push(nodes[file_id].clone());
-
-                if let Some(parent) = nodes.get_mut(dir_id) {
-                    parent.child_ids.push(file_id);
-                    dirty_ids.insert(dir_id);
-                }
-
-                for &ancestor_id in dir_stack.iter() {
-                    if let Some(ancestor) = nodes.get_mut(ancestor_id) {
-                        ancestor.size = ancestor.size.saturating_add(size);
-                        dirty_ids.insert(ancestor_id);
-                    }
-                }
-
-                *progress += 1;
-                self.emit_progress_live(session, &entry_path, *progress)?;
-                self.maybe_flush_stream(
-                    session,
-                    nodes,
-                    pending_added,
-                    dirty_ids,
-                    *progress,
-                    &entry_path.to_string_lossy(),
-                    false,
-                )?;
-            }
-        }
-
-        dir_stack.pop();
-        dirty_ids.insert(dir_id);
-        self.maybe_flush_stream(
-            session,
-            nodes,
-            pending_added,
-            dirty_ids,
-            *progress,
-            &dir_path,
-            false,
-        )?;
-        Ok(nodes[dir_id].size)
-    }
-
-    fn emit_progress_live(
-        &self,
-        session: &mut StreamSession,
-        path: &Path,
-        count: usize,
-    ) -> Result<(), String> {
-        let elapsed = session.last_emit.elapsed();
-        let should_emit = count == 1 || count % 250 == 0 || elapsed >= Duration::from_millis(200);
-
-        if !should_emit {
-            return Ok(());
-        }
-
-        session.last_emit = Instant::now();
-        session
-            .app
-            .emit(
-                "scan-progress",
-                ProgressPayload {
-                    scan_id: Some(session.scan_id.clone()),
-                    path: path.to_string_lossy().into_owned(),
-                    count,
-                },
-            )
-            .map_err(|err| err.to_string())
-    }
-
-    fn maybe_flush_stream(
-        &self,
-        session: &mut StreamSession,
-        nodes: &[FileNode],
-        pending_added: &mut Vec<FileNode>,
-        dirty_ids: &mut HashSet<usize>,
-        count: usize,
-        path: &str,
-        force: bool,
-    ) -> Result<(), String> {
-        let elapsed = session.last_emit.elapsed();
-        let should_flush = force
-            || !pending_added.is_empty() && pending_added.len() >= 16
-            || !dirty_ids.is_empty() && dirty_ids.len() >= 16
-            || elapsed >= Duration::from_millis(16);
-
-        if !should_flush {
-            return Ok(());
-        }
-
-        let added = std::mem::take(pending_added);
-        let updated: Vec<FileNode> = dirty_ids
-            .drain()
-            .filter_map(|id| nodes.get(id).cloned())
-            .collect();
-
-        if added.is_empty() && updated.is_empty() {
-            return Ok(());
-        }
-
-        session.last_emit = Instant::now();
-
-        session
-            .app
-            .emit(
-                "scan-delta",
-                ScanDeltaPayload {
-                    scan_id: session.scan_id.clone(),
-                    added,
-                    updated,
-                    path: path.to_string(),
-                    count,
-                    done: force,
-                },
-            )
-            .map_err(|err| err.to_string())
-    }
 }
 
 // ─── Phase 1: Parallel Walk ─────────────────────────────────────────────────
 
 impl Scanner {
+    fn should_skip_directory(path: &Path, target_path: &Path) -> bool {
+        if path == target_path {
+            return false;
+        }
+
+        let path_str = path.to_string_lossy();
+        let normalized = path_str.replace('\\', "/");
+
+        let to_skip = [
+            "/System/Volumes",
+            "/Volumes",
+            "/dev",
+            "/proc",
+            "/sys",
+        ];
+
+        for skip_path in to_skip.iter() {
+            if normalized == *skip_path {
+                return true;
+            }
+        }
+
+        false
+    }
+
     fn walk_parallel(
         dir: &Path,
         progress: &Arc<AtomicUsize>,
         app: Option<&AppHandle>,
         scan_start: Instant,
         last_emit_ms: &Arc<AtomicU64>,
+        scan_id: Option<&str>,
+        target_path: &Path,
     ) -> RawDir {
         let entries: Vec<fs::DirEntry> = fs::read_dir(dir)
             .ok()
@@ -493,6 +280,10 @@ impl Scanner {
             }
 
             if ft.is_dir() {
+                let entry_path = entry.path();
+                if Self::should_skip_directory(&entry_path, target_path) {
+                    continue;
+                }
                 dir_entries.push(entry);
             } else if ft.is_file() {
                 file_entries.push(entry);
@@ -506,7 +297,9 @@ impl Scanner {
                 let name = entry.file_name().to_string_lossy().into_owned();
                 let path = entry.path();
                 let count = progress.fetch_add(1, Ordering::Relaxed) + 1;
-                Self::emit_progress_throttled(app, dir, count, scan_start, last_emit_ms);
+                if count == 1 || count % 2000 == 0 {
+                    Self::emit_progress_throttled(app, dir, count, scan_start, last_emit_ms, scan_id);
+                }
                 Some(RawFile { name, path, size })
             })
             .collect();
@@ -514,7 +307,7 @@ impl Scanner {
         // ── Fan out into subdirectories across rayon worker threads ──
         let subdirs: Vec<RawDir> = dir_entries
             .par_iter()
-            .map(|entry| Self::walk_parallel(&entry.path(), progress, app, scan_start, last_emit_ms))
+            .map(|entry| Self::walk_parallel(&entry.path(), progress, app, scan_start, last_emit_ms, scan_id, target_path))
             .collect();
 
         let file_size: u64 = files.iter().map(|f| f.size).sum();
@@ -540,6 +333,7 @@ impl Scanner {
         count: usize,
         scan_start: Instant,
         last_emit_ms: &Arc<AtomicU64>,
+        scan_id: Option<&str>,
     ) {
         let elapsed_ms = scan_start.elapsed().as_millis() as u64;
         let last_ms = last_emit_ms.load(Ordering::Relaxed);
@@ -557,7 +351,7 @@ impl Scanner {
                 let _ = handle.emit(
                     "scan-progress",
                     ProgressPayload {
-                        scan_id: None,
+                        scan_id: scan_id.map(|s| s.to_string()),
                         path: dir.to_string_lossy().into_owned(),
                         count,
                     },

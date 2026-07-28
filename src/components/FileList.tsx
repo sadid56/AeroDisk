@@ -18,7 +18,7 @@ interface FileListProps {
 
 const MAX_SEARCH_RESULTS = 100;
 
-export const FileList: React.FC<FileListProps> = ({
+export const FileList: React.FC<FileListProps> = React.memo(({
   activeNode,
   flatNodes,
   searchQuery,
@@ -163,4 +163,4 @@ export const FileList: React.FC<FileListProps> = ({
       </div>
     </div>
   );
-};
+});

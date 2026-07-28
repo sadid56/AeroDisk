@@ -8,7 +8,7 @@ interface BreadcrumbNavProps {
   onNavigate: (nodeId: number) => void;
 }
 
-export const BreadcrumbNav: React.FC<BreadcrumbNavProps> = ({
+export const BreadcrumbNav: React.FC<BreadcrumbNavProps> = React.memo(({
   flatNodes,
   breadcrumbIds,
   onNavigate,
@@ -55,4 +55,4 @@ export const BreadcrumbNav: React.FC<BreadcrumbNavProps> = ({
       })}
     </div>
   );
-};
+});

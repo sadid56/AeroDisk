@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useCreateFolder } from '../hooks/useCreateFolder';
 import { FolderPlus, X, Loader2 } from 'lucide-react';
 import { showToast } from '../providers/ToastProvider';
 import { FileNode } from '../types';
@@ -11,14 +11,14 @@ interface CreateFolderModalProps {
   onFolderCreated: (newPath: string, folderName: string) => void;
 }
 
-export const CreateFolderModal: React.FC<CreateFolderModalProps> = ({
+export const CreateFolderModal: React.FC<CreateFolderModalProps> = React.memo(({
   isOpen,
   parentFolder,
   onClose,
   onFolderCreated,
 }) => {
   const [folderName, setFolderName] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
+  const { createFolder, isCreating } = useCreateFolder();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -35,14 +35,13 @@ export const CreateFolderModal: React.FC<CreateFolderModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!folderName.trim()) return;
+    if (!folderName.trim() || !parentFolder) return;
 
-    setIsCreating(true);
     try {
-      const createdPath = await invoke<string>('create_new_folder', {
-        parentPath: parentFolder.path,
-        folderName: folderName.trim(),
-      });
+      const createdPath = await createFolder(
+        parentFolder.path,
+        folderName.trim()
+      );
 
       showToast({
         message: 'Folder Created',
@@ -58,8 +57,6 @@ export const CreateFolderModal: React.FC<CreateFolderModalProps> = ({
         description: String(err),
         type: 'error',
       });
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -133,4 +130,4 @@ export const CreateFolderModal: React.FC<CreateFolderModalProps> = ({
       </div>
     </div>
   );
-};
+});

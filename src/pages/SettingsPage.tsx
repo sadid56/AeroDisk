@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getVersion } from '@tauri-apps/api/app';
 import { Settings, Type, Palette, Check, Sun, Moon, Laptop } from "lucide-react";
 
 export type ThemeMode = 'dark' | 'light' | 'system';
@@ -65,11 +67,24 @@ export function applyFont(fontFamily: string) {
 interface SettingsPageProps {
   onBackToAnalyzer: () => void;
 }
-
-export const SettingsPage: React.FC<SettingsPageProps> = () => {
+export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
+  const navigate = useNavigate();
   const [selectedFont, setSelectedFont] = useState<string>("Inter");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [systemFonts, setSystemFonts] = useState<string[]>(DEFAULT_FONTS);
+  const [appVersion, setAppVersion] = useState<string>("2.0.0");
+
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const ver = await getVersion();
+        setAppVersion(ver);
+      } catch (err) {
+        console.warn("Failed to fetch version:", err);
+      }
+    };
+    fetchVersion();
+  }, []);
 
   useEffect(() => {
     const savedFont = localStorage.getItem("aerodisk_font");
@@ -110,19 +125,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
       }
     } catch (err) {
       console.warn("Local font access query failed:", err);
-    } finally {
     }
   };
 
-  const handleFontChange = (font: string) => {
+  const handleFontChange = useCallback((font: string) => {
     setSelectedFont(font);
     applyFont(font);
-  };
+  }, []);
 
-  const handleThemeChange = (mode: ThemeMode) => {
+  const handleThemeChange = useCallback((mode: ThemeMode) => {
     setThemeMode(mode);
     applyThemeMode(mode);
-  };
+  }, []);
 
   const themeOptions: { mode: ThemeMode; label: string; icon: any; desc: string }[] = [
     {
@@ -148,7 +162,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
   return (
     <div className='flex-1 overflow-y-auto bg-background bg-glow p-6 sm:p-10 select-none'>
       <div className='max-w-4xl mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-150'>
-        {/* Navigation Bar */}
         <div className='flex items-center justify-between border-b border-surface-border pb-6'>
           <div className='flex items-center gap-4'>
             <div className='flex items-center gap-3'>
@@ -158,7 +171,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
           </div>
         </div>
 
-        {/* Section 1: Universal Theme System */}
         <section className='bg-surface/60 border border-surface-border rounded-2xl p-6 space-y-4'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-2.5'>
@@ -198,7 +210,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
           </div>
         </section>
 
-        {/* Section 2: Typography & System Fonts */}
         <section className='bg-surface/60 border border-surface-border rounded-2xl p-6 space-y-4'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-2.5'>
@@ -224,7 +235,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
             })}
           </div>
         </section>
+
+        <section className='bg-surface/60 border border-surface-border rounded-2xl p-6 space-y-4'>
+          <div className='flex items-center justify-between'>
+            <div className='flex items-center gap-2.5'>
+              <Settings className='w-5 h-5 text-accent-purple' />
+              <h2 className='text-sm font-bold'>System & Updates</h2>
+            </div>
+          </div>
+
+          <div className='p-4 bg-background/40 border border-surface-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+            <div>
+              <h3 className='font-bold text-xs text-text-primary'>Current Version: v{appVersion}</h3>
+              <p className='text-[10px] text-text-muted mt-0.5'>Check release status and manage download parameters</p>
+            </div>
+            <button
+              onClick={() => navigate('/updates')}
+              className='px-4 py-2 rounded-xl border border-surface-border bg-background hover:bg-surface-hover text-xs font-bold text-text-secondary hover:text-text-primary transition-all cursor-pointer'
+            >
+              Check & Manage Updates
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   );
-};
+});

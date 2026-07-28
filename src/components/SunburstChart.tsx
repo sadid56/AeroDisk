@@ -11,12 +11,10 @@ interface SunburstChartProps {
   onNavigate: (nodeId: number) => void;
 }
 
-const RING_WIDTH = 54;
-const INNER_RADIUS = 50;
 const MAX_DEPTH = 3;
 const GAP_ANGLE = 0.006; // Elegant subtle arc gap
 
-export const SunburstChart: React.FC<SunburstChartProps> = ({
+export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({
   flatNodes,
   currentId,
   hoveredNode,
@@ -30,9 +28,9 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
 
   const rootNode = currentId !== null ? flatNodes[currentId] : null;
 
-  // Compute slices recursively
+  // Compute slices recursively with dynamic radius metrics
   const computeSlices = useCallback(
-    (root: FileNode): Slice[] => {
+    (root: FileNode, innerRadius: number, ringWidth: number): Slice[] => {
       const slices: Slice[] = [];
 
       function recurse(node: FileNode, depth: number, startAngle: number, endAngle: number) {
@@ -54,8 +52,8 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
           const adjustedEnd = childEnd - GAP_ANGLE / 2;
 
           if (adjustedEnd > adjustedStart) {
-            const rInner = INNER_RADIUS + depth * RING_WIDTH;
-            const rOuter = rInner + RING_WIDTH - 3;
+            const rInner = innerRadius + depth * ringWidth;
+            const rOuter = rInner + ringWidth - 3;
 
             slices.push({
               node: child,
@@ -95,7 +93,12 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
     const cx = width / 2;
     const cy = height / 2;
 
-    const slices = computeSlices(rootNode);
+    // Calculate dynamic radial dimensions based on canvas bounds (maintains perfect ratio on any viewport)
+    const maxRadius = Math.min(width, height) * 0.45;
+    const innerRadius = maxRadius * 0.22;
+    const ringWidth = (maxRadius - innerRadius) / MAX_DEPTH;
+
+    const slices = computeSlices(rootNode, innerRadius, ringWidth);
     slicesRef.current = slices;
 
     // Draw Slices
@@ -140,29 +143,37 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
     const surfaceColor = getComputedStyle(document.documentElement).getPropertyValue('--surface-color').trim() || '#121217';
 
     ctx.beginPath();
-    ctx.arc(cx, cy, INNER_RADIUS - 3, 0, Math.PI * 2);
+    ctx.arc(cx, cy, innerRadius - 3, 0, Math.PI * 2);
     ctx.fillStyle = surfaceColor;
     ctx.fill();
     ctx.strokeStyle = 'rgba(140, 140, 160, 0.25)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Center Display Card Info
+    // Center Display Card Info (Scaled proportionally)
     const displayNode = hoveredNode || rootNode;
+    const titleSize = Math.max(9, Math.min(13, innerRadius * 0.24));
+    const sizeValSize = Math.max(8, Math.min(12, innerRadius * 0.22));
+    const itemsSize = Math.max(7, Math.min(9, innerRadius * 0.18));
+
+    const titleOffset = -innerRadius * 0.2;
+    const sizeOffset = innerRadius * 0.16;
+    const countOffset = innerRadius * 0.44;
+
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '600 12px Inter, sans-serif';
-    ctx.fillText(truncate(displayNode.name || '/', 13), cx, cy - 10);
+    ctx.font = `600 ${titleSize}px Inter, sans-serif`;
+    ctx.fillText(truncate(displayNode.name || '/', Math.floor(innerRadius * 0.26)), cx, cy + titleOffset);
 
-    ctx.fillStyle = '#a855f7';
-    ctx.font = '700 11px JetBrains Mono, monospace';
-    ctx.fillText(formatBytes(displayNode.size), cx, cy + 8);
+    ctx.fillStyle = '#8b5cf6'; // matching active theme violet
+    ctx.font = `700 ${sizeValSize}px JetBrains Mono, monospace`;
+    ctx.fillText(formatBytes(displayNode.size), cx, cy + sizeOffset);
 
     if (displayNode.isDirectory && displayNode.childIds) {
       ctx.fillStyle = 'rgba(140, 140, 160, 0.6)';
-      ctx.font = '500 9px Inter, sans-serif';
-      ctx.fillText(`${displayNode.childIds.length} items`, cx, cy + 22);
+      ctx.font = `500 ${itemsSize}px Inter, sans-serif`;
+      ctx.fillText(`${displayNode.childIds.length} items`, cx, cy + countOffset);
     }
   }, [rootNode, hoveredNode, computeSlices]);
 
@@ -270,4 +281,4 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({
       />
     </div>
   );
-};
+});

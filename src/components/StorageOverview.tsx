@@ -9,7 +9,7 @@ interface StorageOverviewProps {
   totalItems: number;
 }
 
-export const StorageOverview: React.FC<StorageOverviewProps> = ({
+export const StorageOverview: React.FC<StorageOverviewProps> = React.memo(({
   diskInfo,
   scannedPath,
   totalItems,
@@ -61,4 +61,4 @@ export const StorageOverview: React.FC<StorageOverviewProps> = ({
       )}
     </div>
   );
-};
+});

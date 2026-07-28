@@ -11,9 +11,10 @@ interface HeaderProps {
   onOpenSearchModal: () => void;
   isScanning: boolean;
   hasScanData: boolean;
+  updateAvailable?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({
+export const Header: React.FC<HeaderProps> = React.memo(({
   onSelectFolder,
   onCreateFolder,
   onDashboard,
@@ -21,6 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSearchModal,
   isScanning,
   hasScanData,
+  updateAvailable,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -120,10 +122,13 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => navigate("/settings")}
-              title='Application Settings'
-              className='p-2 rounded-lg bg-surface border border-surface-border hover:bg-surface-hover transition-all cursor-pointer text-slate-200 hover:text-white'
+              title={updateAvailable ? 'Application Settings (Update Available)' : 'Application Settings'}
+              className='relative p-2 rounded-lg bg-surface border border-surface-border hover:bg-surface-hover transition-all cursor-pointer text-slate-200 hover:text-white'
             >
               <Settings className='w-4 h-4' />
+              {updateAvailable && (
+                <span className='absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent-purple border-2 border-surface animate-pulse shadow-glow' />
+              )}
             </button>
 
             <button
@@ -139,4 +144,4 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
     </header>
   );
-};
+});

@@ -2,7 +2,8 @@ import React from 'react';
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { AnalyzerPage } from '../pages/AnalyzerPage';
 import { SettingsPage } from '../pages/SettingsPage';
-import { WelcomeDashboard } from '../components/WelcomeDashboard';
+import { HomePage } from '../pages/HomePage';
+import { UpdatesPage } from '../pages/UpdatesPage';
 import { FileNode, DiskSpaceInfo } from '../types';
 
 interface AppRoutesProps {
@@ -24,6 +25,7 @@ interface AppRoutesProps {
   onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
   onCopyPath: () => void;
   onScanPath: (path: string) => void;
+  updater: any;
 }
 
 export const AppRoutes: React.FC<AppRoutesProps> = ({
@@ -45,6 +47,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   onContextMenu,
   onCopyPath,
   onScanPath,
+  updater,
 }) => {
   const navigate = useNavigate();
 
@@ -73,11 +76,12 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
               onCopyPath={onCopyPath}
             />
           ) : (
-            <WelcomeDashboard onScanPath={onScanPath} isScanning={isScanning} scanCount={scanCount} scanStatusPath={scanStatusPath} />
+            <HomePage onScanPath={onScanPath} isScanning={isScanning} scanCount={scanCount} scanStatusPath={scanStatusPath} />
           )
         }
       />
       <Route path='/settings' element={<SettingsPage onBackToAnalyzer={() => navigate("/")} />} />
+      <Route path='/updates' element={<UpdatesPage onBack={() => navigate("/settings")} updater={updater} />} />
     </Routes>
   );
 };
