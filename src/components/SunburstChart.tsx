@@ -18,7 +18,7 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({
   flatNodes,
   currentId,
   hoveredNode,
-  isScanning,
+  isScanning: _isScanning,
   onHoverNode,
   onNavigate,
 }) => {

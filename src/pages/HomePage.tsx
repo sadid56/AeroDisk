@@ -34,7 +34,7 @@ const DriveCardSkeleton = () => (
   </div>
 );
 
-export const HomePage: React.FC<HomePageProps> = React.memo(({ onScanPath, isScanning, scanCount, scanStatusPath }) => {
+export const HomePage: React.FC<HomePageProps> = React.memo(({ onScanPath, isScanning, scanCount: _scanCount, scanStatusPath: _scanStatusPath }) => {
   const { drives, folders, loading, refetch } = useSystemDrives();
   const { hasFDA, checkFDA, requestFDA } = useFullDiskAccess();
 
