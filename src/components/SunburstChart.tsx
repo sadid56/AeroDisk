@@ -254,20 +254,46 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({
   };
 
   if (!rootNode) {
-    if (isScanning) {
-      return (
-        <div className="w-full h-full flex items-center justify-center p-6 text-center text-slate-500">
-          <div className="space-y-3">
-            <div className="mx-auto w-12 h-12 rounded-2xl bg-gradient-to-tr from-accent-purple via-accent-pink to-accent-blue flex items-center justify-center shadow-xl shadow-accent-purple/20 animate-pulse">
-              <div className="w-5 h-5 rounded-full border-2 border-white/80 border-t-transparent animate-spin" />
-            </div>
-            <div className="text-xs font-medium text-slate-400">Building tree view...</div>
+    return (
+      <div className="w-full h-full flex items-center justify-center p-6 select-none">
+        {/* Skeleton sunburst placeholder — feels like an instant page load */}
+        <div className="relative" style={{ width: 240, height: 240 }}>
+          {/* Outer ring */}
+          <div
+            className="absolute inset-0 rounded-full border-[18px] opacity-[0.08]"
+            style={{ borderColor: 'var(--accent-purple-color)' }}
+          />
+          {/* Middle ring */}
+          <div
+            className="absolute rounded-full border-[14px] opacity-[0.06]"
+            style={{
+              inset: 26,
+              borderColor: 'var(--accent-purple-color)',
+            }}
+          />
+          {/* Inner ring */}
+          <div
+            className="absolute rounded-full border-[10px] opacity-[0.04]"
+            style={{
+              inset: 48,
+              borderColor: 'var(--accent-purple-color)',
+            }}
+          />
+          {/* Center hole */}
+          <div
+            className="absolute rounded-full flex flex-col items-center justify-center"
+            style={{
+              inset: 66,
+              backgroundColor: 'var(--surface-color)',
+              border: '1px solid var(--surface-border-color)',
+            }}
+          >
+            <div className="w-12 h-2.5 rounded bg-surface-border/40 mb-2" />
+            <div className="w-8 h-2 rounded bg-surface-border/30" />
           </div>
         </div>
-      );
-    }
-
-    return null;
+      </div>
+    );
   }
 
   return (

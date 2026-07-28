@@ -1,8 +1,8 @@
-# AeroDisk Architecture
+# HyperDisk Architecture
 
 ## Overview
 
-AeroDisk is a desktop application composed of a React frontend and a Rust backend connected through Tauri. The frontend handles user interaction, display, and scanning state, while the backend performs fast, native file system scanning and system integration.
+HyperDisk is a desktop application composed of a React frontend and a Rust backend connected through Tauri. The frontend handles user interaction, display, and scanning state, while the backend performs fast, native file system scanning and system integration.
 
 ## Frontend
 

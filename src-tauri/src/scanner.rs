@@ -19,6 +19,8 @@ pub struct FileNode {
     pub size: u64,
     pub child_ids: Vec<usize>,
     pub parent_id: Option<usize>,
+    #[serde(default)]
+    pub created_at: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -60,14 +62,15 @@ pub struct ScanErrorPayload {
 
 struct RawFile {
     name: String,
-    path: PathBuf,
     size: u64,
+    created_at: Option<u64>,
 }
 
 struct RawDir {
     name: String,
     path: PathBuf,
     size: u64,
+    created_at: Option<u64>,
     files: Vec<RawFile>,
     subdirs: Vec<RawDir>,
 }
@@ -133,8 +136,16 @@ impl Scanner {
 
         // Phase 1: Parallel filesystem walk across all CPU cores
         let walk_start = Instant::now();
+        let root_created_at = fs::metadata(root_path).ok().and_then(|m| {
+            m.created()
+                .or_else(|_| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+        });
         let raw_tree = Self::walk_parallel(
             root_path,
+            root_created_at,
             &progress,
             app_clone.as_ref(),
             total_start,
@@ -254,6 +265,7 @@ impl Scanner {
 
     fn walk_parallel(
         dir: &Path,
+        created_at: Option<u64>,
         progress: &Arc<AtomicUsize>,
         app: Option<&AppHandle>,
         scan_start: Instant,
@@ -261,53 +273,75 @@ impl Scanner {
         scan_id: Option<&str>,
         target_path: &Path,
     ) -> RawDir {
-        let entries: Vec<fs::DirEntry> = fs::read_dir(dir)
-            .ok()
-            .map(|rd| rd.flatten().collect())
-            .unwrap_or_default();
+        let mut file_entries = Vec::new();
+        let mut dir_entries = Vec::new();
 
-        let mut file_entries: Vec<fs::DirEntry> = Vec::new();
-        let mut dir_entries: Vec<fs::DirEntry> = Vec::new();
-
-        for entry in entries {
-            let ft = match entry.file_type() {
-                Ok(ft) => ft,
-                Err(_) => continue,
-            };
-
-            if ft.is_symlink() {
-                continue;
-            }
-
-            if ft.is_dir() {
-                let entry_path = entry.path();
-                if Self::should_skip_directory(&entry_path, target_path) {
-                    continue;
+        if let Ok(read_dir) = fs::read_dir(dir) {
+            for entry in read_dir.flatten() {
+                if let Ok(ft) = entry.file_type() {
+                    if ft.is_symlink() {
+                        continue;
+                    }
+                    if ft.is_dir() {
+                        let entry_path = entry.path();
+                        if !Self::should_skip_directory(&entry_path, target_path) {
+                            dir_entries.push(entry);
+                        }
+                    } else if ft.is_file() {
+                        file_entries.push(entry);
+                    }
                 }
-                dir_entries.push(entry);
-            } else if ft.is_file() {
-                file_entries.push(entry);
             }
         }
 
-        let files: Vec<RawFile> = file_entries
-            .into_par_iter()
-            .filter_map(|entry| {
-                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let path = entry.path();
-                let count = progress.fetch_add(1, Ordering::Relaxed) + 1;
-                if count == 1 || count % 2000 == 0 {
-                    Self::emit_progress_throttled(app, dir, count, scan_start, last_emit_ms, scan_id);
-                }
-                Some(RawFile { name, path, size })
-            })
-            .collect();
+        let process_file = |entry: fs::DirEntry| {
+            let meta = entry.metadata().ok();
+            let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+            let created_at = meta.as_ref().and_then(|m| {
+                m.created()
+                    .or_else(|_| m.modified())
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs())
+            });
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let count = progress.fetch_add(1, Ordering::Relaxed) + 1;
+            if count == 1 || count % 2000 == 0 {
+                Self::emit_progress_throttled(app, dir, count, scan_start, last_emit_ms, scan_id);
+            }
+            Some(RawFile { name, size, created_at })
+        };
+
+        let files: Vec<RawFile> = if file_entries.len() > 512 {
+            file_entries.into_par_iter().filter_map(process_file).collect()
+        } else {
+            file_entries.into_iter().filter_map(process_file).collect()
+        };
 
         // ── Fan out into subdirectories across rayon worker threads ──
         let subdirs: Vec<RawDir> = dir_entries
             .par_iter()
-            .map(|entry| Self::walk_parallel(&entry.path(), progress, app, scan_start, last_emit_ms, scan_id, target_path))
+            .map(|entry| {
+                let entry_path = entry.path();
+                let meta = entry.metadata().ok();
+                let subdir_created_at = meta.as_ref().and_then(|m| {
+                    m.created()
+                        .or_else(|_| m.modified())
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs())
+                });
+                Self::walk_parallel(
+                    &entry_path,
+                    subdir_created_at,
+                    progress,
+                    app,
+                    scan_start,
+                    last_emit_ms,
+                    scan_id,
+                    target_path,
+                )
+            })
             .collect();
 
         let file_size: u64 = files.iter().map(|f| f.size).sum();
@@ -322,6 +356,7 @@ impl Scanner {
             name,
             path: dir.to_path_buf(),
             size: file_size + dir_size,
+            created_at,
             files,
             subdirs,
         }
@@ -377,11 +412,12 @@ impl Scanner {
         nodes.push(FileNode {
             id: dir_id,
             name: raw.name.clone(),
-            path: dir_path,
+            path: if parent_id.is_none() { dir_path } else { String::new() },
             is_directory: true,
             size: raw.size,
             child_ids: Vec::new(),
             parent_id,
+            created_at: raw.created_at,
         });
 
         let mut child_ids = Vec::with_capacity(raw.subdirs.len() + raw.files.len());
@@ -403,17 +439,18 @@ impl Scanner {
         for idx in sorted_files {
             let file = &raw.files[idx];
             let file_id = nodes.len();
-            let file_path = file.path.to_string_lossy().into_owned();
+            let file_path = raw.path.join(&file.name).to_string_lossy().into_owned();
             child_ids.push(file_id);
-            paths.push(file_path.clone());
+            paths.push(file_path);
             nodes.push(FileNode {
                 id: file_id,
                 name: file.name.clone(),
-                path: file_path,
+                path: String::new(),
                 is_directory: false,
                 size: file.size,
                 child_ids: Vec::new(),
                 parent_id: Some(dir_id),
+                created_at: file.created_at,
             });
         }
 

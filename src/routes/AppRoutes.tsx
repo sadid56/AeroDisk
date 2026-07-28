@@ -23,7 +23,6 @@ interface AppRoutesProps {
   onSelectNode: (node: FileNode | null) => void;
   onNavigate: (id: number) => void;
   onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
-  onCopyPath: () => void;
   onScanPath: (path: string) => void;
   updater: any;
 }
@@ -45,7 +44,6 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   onSelectNode,
   onNavigate,
   onContextMenu,
-  onCopyPath,
   onScanPath,
   updater,
 }) => {
@@ -73,7 +71,6 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
               onSelectNode={onSelectNode}
               onNavigate={onNavigate}
               onContextMenu={onContextMenu}
-              onCopyPath={onCopyPath}
             />
           ) : (
             <HomePage onScanPath={onScanPath} isScanning={isScanning} scanCount={scanCount} scanStatusPath={scanStatusPath} />

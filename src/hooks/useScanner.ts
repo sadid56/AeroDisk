@@ -22,6 +22,8 @@ export function useScanner() {
   const flushRafRef = useRef<number | null>(null);
   const listenerCleanupRef = useRef<Array<() => void>>([]);
   const rootInitializedRef = useRef<boolean>(false);
+  // Buffer for accumulating scan data — only flushed to state on scan-complete
+  const bufferedNodesRef = useRef<FileNode[]>([]);
 
   const cleanupScanStream = useCallback(() => {
     if (flushRafRef.current !== null) {
@@ -32,6 +34,7 @@ export function useScanner() {
     deltaQueueRef.current = [];
     scanCountRef.current = 0;
     rootInitializedRef.current = false;
+    bufferedNodesRef.current = [];
 
     const listeners = listenerCleanupRef.current;
     listenerCleanupRef.current = [];
@@ -45,6 +48,7 @@ export function useScanner() {
     }
   }, []);
 
+  // Flush queued deltas into the BUFFER ref (not React state) — zero re-renders during scan
   const flushQueuedDeltas = useCallback(() => {
     flushRafRef.current = null;
 
@@ -57,38 +61,25 @@ export function useScanner() {
     }
 
     scanCountRef.current += addedCount;
-    setScanCount(scanCountRef.current);
 
-    setFlatNodes((prevNodes) => {
-      const nextNodes = [...prevNodes];
+    const nextNodes = bufferedNodesRef.current;
 
-      for (const delta of deltas) {
-        for (const node of delta.added) {
-          nextNodes[node.id] = node;
-
-          if (node.parentId !== null && nextNodes[node.parentId]) {
-            const parent = nextNodes[node.parentId];
-            nextNodes[node.parentId] = {
-              ...parent,
-              childIds: parent.childIds.includes(node.id) ? parent.childIds : [...parent.childIds, node.id],
-            };
-          }
-        }
-
-        for (const node of delta.updated) {
-          if (nextNodes[node.id]) {
-            nextNodes[node.id] = {
-              ...nextNodes[node.id],
-              ...node,
-            };
-          } else {
-            nextNodes[node.id] = node;
-          }
-        }
+    for (const delta of deltas) {
+      for (const node of delta.added) {
+        nextNodes[node.id] = node;
       }
 
-      return nextNodes;
-    });
+      for (const node of delta.updated) {
+        if (nextNodes[node.id]) {
+          nextNodes[node.id] = {
+            ...nextNodes[node.id],
+            ...node,
+          };
+        } else {
+          nextNodes[node.id] = node;
+        }
+      }
+    }
   }, []);
 
   const scheduleFlush = useCallback(() => {
@@ -120,6 +111,7 @@ export function useScanner() {
       setBreadcrumbIds([]);
       setHoveredNode(null);
       setSelectedNode(null);
+      bufferedNodesRef.current = [];
 
       try {
         const unlistenProgress = await listen<ProgressPayload>("scan-progress", (event) => {
@@ -137,12 +129,21 @@ export function useScanner() {
         const unlistenComplete = await listen<ScanCompletePayload>("scan-complete", (event) => {
           if (event.payload.scanId !== activeScanIdRef.current) return;
 
+          // Cancel any pending RAF flush and drain the remaining queue into the buffer
           if (flushRafRef.current !== null) {
             cancelAnimationFrame(flushRafRef.current);
             flushRafRef.current = null;
           }
-
           flushQueuedDeltas();
+
+          // Flush the entire buffer into React state at once — single render with all data
+          const finalNodes = bufferedNodesRef.current;
+          setFlatNodes(finalNodes);
+          if (finalNodes.length > 0 && finalNodes[0]) {
+            setCurrentId(0);
+            setBreadcrumbIds([0]);
+            setSelectedNode(finalNodes[0]);
+          }
           setScanCount(event.payload.count);
           setIsScanning(false);
           activeScanIdRef.current = null;
@@ -160,7 +161,7 @@ export function useScanner() {
 
         listenerCleanupRef.current = [unlistenProgress, unlistenDelta, unlistenComplete, unlistenError];
 
-        // Let React paint the loading state before the native scan begins.
+        // Let React paint the skeleton state before the native scan begins.
         await new Promise<void>((resolve) => {
           requestAnimationFrame(() => resolve());
         });
@@ -200,12 +201,17 @@ export function useScanner() {
   const navigateTo = useCallback(
     (nodeId: number) => {
       setCurrentId(nodeId);
-      setBreadcrumbIds((prev) => {
-        const idx = prev.indexOf(nodeId);
-        if (idx !== -1) {
-          return prev.slice(0, idx + 1);
+      setBreadcrumbIds(() => {
+        // Build path hierarchy from target node up to root
+        const trail: number[] = [];
+        let curr: number | null = nodeId;
+        while (curr !== null && flatNodes[curr]) {
+          trail.unshift(curr);
+          curr = flatNodes[curr].parentId;
         }
-        return [...prev, nodeId];
+
+        // If trail is valid, use it; otherwise fallback to prev path
+        return trail.length > 0 ? trail : [nodeId];
       });
       setHoveredNode(null);
       if (flatNodes[nodeId]) {
@@ -242,14 +248,14 @@ export function useScanner() {
     });
   }, []);
 
-  const addFolderNode = useCallback((parentId: number, newPath: string, folderName: string): number => {
+  const addFolderNode = useCallback((parentId: number, _newPath: string, folderName: string): number => {
     let newNodeId = 0;
     setFlatNodes((prevNodes) => {
       newNodeId = prevNodes.length;
       const newNode: FileNode = {
         id: newNodeId,
         name: folderName,
-        path: newPath,
+        path: "",
         isDirectory: true,
         size: 0,
         childIds: [],
@@ -339,3 +345,4 @@ export function useScanner() {
     activeNode,
   };
 }
+

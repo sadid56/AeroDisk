@@ -6,6 +6,7 @@ export interface FileNode {
   size: number;
   childIds: number[];
   parentId: number | null;
+  createdAt?: number;
 }
 
 export interface Slice {

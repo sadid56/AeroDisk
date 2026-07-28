@@ -1,5 +1,6 @@
 import React from 'react';
 import { Download, X, ArrowUpCircle } from 'lucide-react';
+import { Button } from './ui/Button';
 
 interface UpdateModalProps {
   isOpen: boolean;
@@ -34,16 +35,17 @@ export const UpdateModal: React.FC<UpdateModalProps> = React.memo(({
             </div>
             <div>
               <h2 className="text-base font-bold text-text-primary">Update Available</h2>
-              <p className="text-[11px] text-text-muted mt-0.5">A new version of AeroDisk is ready (v{version})</p>
+              <p className="text-[11px] text-text-muted mt-0.5">A new version of HyperDisk is ready (v{version})</p>
             </div>
           </div>
           {!installing && (
-            <button
+            <Button
+              variant="outline"
+              size="icon"
               onClick={onSkip}
-              className="p-1 rounded-lg border border-surface-border text-text-muted hover:text-text-primary hover:bg-surface-hover transition-all cursor-pointer"
             >
               <X className="w-4 h-4" />
-            </button>
+            </Button>
           )}
         </div>
 
@@ -74,19 +76,19 @@ export const UpdateModal: React.FC<UpdateModalProps> = React.memo(({
           </div>
         ) : (
           <div className="flex items-center justify-end gap-3 pt-2">
-            <button
+            <Button
+              variant="outline"
               onClick={onSkip}
-              className="px-4 py-2 text-xs font-semibold rounded-xl border border-surface-border bg-background hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-all cursor-pointer"
             >
               Skip this Version
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={onConfirm}
-              className="px-4 py-2 text-xs font-semibold rounded-xl text-white bg-gradient-to-r from-accent-purple to-accent-blue hover:brightness-110 active:scale-95 shadow-md shadow-accent-purple/20 transition-all cursor-pointer flex items-center gap-2"
+              leftIcon={<Download className="w-3.5 h-3.5" />}
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Update Now</span>
-            </button>
+              Update Now
+            </Button>
           </div>
         )}
 

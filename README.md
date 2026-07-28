@@ -1,10 +1,10 @@
-# AeroDisk
+# HyperDisk
 
-AeroDisk is a high-performance desktop disk usage analyzer built to help you inspect storage, identify large files and folders, and clean up disk space with confidence.
+HyperDisk is a high-performance desktop disk usage analyzer built to help you inspect storage, identify large files and folders, and clean up disk space with confidence.
 
 ---
 
-## What AeroDisk Does
+## What HyperDisk Does
 
 - Scan folders or drives and show storage usage in a visual layout.
 - Display an interactive sunburst chart and file list for easy exploration.
@@ -15,7 +15,7 @@ AeroDisk is a high-performance desktop disk usage analyzer built to help you ins
 
 ## How to Use It
 
-1. Open AeroDisk.
+1. Open HyperDisk.
 2. Choose a folder or drive to scan.
 3. Wait for the scan progress to complete.
 4. Explore the results using the chart, file list, and breadcrumbs.

@@ -2,16 +2,20 @@
 
 :root {
   --font-custom: "Inter", system-ui, -apple-system, sans-serif;
-  --bg-color: #09090b;
-  --surface-color: #121217;
-  --surface-hover-color: #1a1a23;
-  --surface-border-color: #242432;
+  --bg-color: #1a1a2e;
+  --surface-color: #1e1e33;
+  --surface-hover-color: #262640;
+  --surface-border-color: #2e2e48;
   --text-color: #f1f5f9;
   --text-primary: #f8fafc;
   --text-secondary: #cbd5e1;
   --text-muted: #94a3b8;
   --accent-purple-color: #8b5cf6;
   --accent-blue-color: #3b82f6;
+  --btn-primary-bg: #334155;
+  --btn-primary-hover: #475569;
+  --btn-primary-text: #f8fafc;
+  --btn-primary-border: #475569;
 }
 
 @theme {
@@ -60,7 +64,7 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--surface-color, #121217) !important;
+  background: var(--surface-color, #1e1e33) !important;
   border-radius: 9999px !important;
 }
 
@@ -79,4 +83,10 @@
   background-image: 
     radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.06) 0px, transparent 50%),
     radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 50%);
+}
+
+/* Skeleton shimmer animation for loading states */
+@keyframes skeleton-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }

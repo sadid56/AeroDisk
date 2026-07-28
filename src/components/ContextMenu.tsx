@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { useProtectedPath } from '../hooks/useProtectedPath';
 import {
   FolderOpen,
@@ -10,11 +10,14 @@ import {
   Terminal,
 } from 'lucide-react';
 import { FileNode } from '../types';
+import { Dropdown, DropdownItem, DropdownDivider } from './ui/Dropdown';
+import { getFullPath } from '../utils/pathUtils';
 
 interface ContextMenuProps {
   x: number;
   y: number;
   node: FileNode;
+  flatNodes: FileNode[];
   onClose: () => void;
   onNavigate: (id: number) => void;
   onReveal: (path: string) => void;
@@ -28,6 +31,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(({
   x,
   y,
   node,
+  flatNodes,
   onClose,
   onNavigate,
   onReveal,
@@ -36,112 +40,113 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(({
   onCreateSubfolder,
   onOpenInTerminal,
 }) => {
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const { isProtected } = useProtectedPath(node.path);
+  const resolvedPath = getFullPath(node.id, flatNodes);
+  const { isProtected } = useProtectedPath(resolvedPath);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
+  type MenuItemConfig = 
+    | { type: 'divider'; key: string }
+    | {
+        type: 'item';
+        key: string;
+        label: string;
+        icon: React.ReactNode;
+        onClick: () => void;
+        variant?: 'default' | 'danger' | 'warning';
       }
-    };
-    window.addEventListener('mousedown', handleClickOutside);
-    return () => window.removeEventListener('mousedown', handleClickOutside);
-  }, [onClose]);
+    | {
+        type: 'custom';
+        key: string;
+        content: React.ReactNode;
+      };
 
-  const adjustedX = Math.min(x, window.innerWidth - 220);
-  const adjustedY = Math.min(y, window.innerHeight - 280);
+  const menuItems: MenuItemConfig[] = [
+    ...(node.isDirectory
+      ? [
+          {
+            type: 'item' as const,
+            key: 'open-folder',
+            label: 'Open Folder',
+            icon: <FolderOpen className="w-4 h-4 text-accent-purple" />,
+            onClick: () => onNavigate(node.id),
+          },
+          ...(onCreateSubfolder
+            ? [
+                {
+                  type: 'item' as const,
+                  key: 'create-folder',
+                  label: 'Create Folder',
+                  icon: <FolderPlus className="w-4 h-4 text-accent-purple" />,
+                  onClick: () => onCreateSubfolder(node),
+                },
+              ]
+            : []),
+        ]
+      : []),
+    {
+      type: 'item' as const,
+      key: 'reveal-file-manager',
+      label: 'Reveal in File Manager',
+      icon: <ExternalLink className="w-4 h-4 text-accent-blue" />,
+      onClick: () => onReveal(resolvedPath),
+    },
+    {
+      type: 'item' as const,
+      key: 'open-terminal',
+      label: 'Open in Terminal',
+      icon: <Terminal className="w-4 h-4 text-emerald-400" />,
+      onClick: () => onOpenInTerminal(resolvedPath),
+    },
+    {
+      type: 'item' as const,
+      key: 'copy-path',
+      label: 'Copy Path',
+      icon: <Copy className="w-4 h-4 text-accent-pink" />,
+      onClick: () => onCopyPath(resolvedPath),
+    },
+    { type: 'divider' as const, key: 'divider-1' },
+    isProtected
+      ? {
+          type: 'custom' as const,
+          key: 'protected-path',
+          content: (
+            <div className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center gap-2 text-[11px] font-semibold">
+              <ShieldAlert className="w-4 h-4 shrink-0" />
+              <span>Protected System Path</span>
+            </div>
+          ),
+        }
+      : {
+          type: 'item' as const,
+          key: 'delete',
+          label: 'Move to Trash',
+          icon: <Trash2 className="w-4 h-4" />,
+          variant: 'danger' as const,
+          onClick: () => onDelete(node),
+        },
+  ];
 
   return (
-    <div
-      ref={menuRef}
-      style={{ left: `${adjustedX}px`, top: `${adjustedY}px` }}
-      className="fixed z-50 w-52 bg-surface/95 backdrop-blur-xl border border-surface-border rounded-xl shadow-2xl p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-100 text-xs select-none"
-    >
-      <div className="px-2 py-1 border-b border-surface-border text-[11px] font-semibold text-slate-400 truncate">
-        {node.name}
-      </div>
-
-      {node.isDirectory && (
-        <>
-          <button
+    <Dropdown x={x} y={y} header={node.name} onClose={onClose}>
+      {menuItems.map((item) => {
+        if (item.type === 'divider') {
+          return <DropdownDivider key={item.key} />;
+        }
+        if (item.type === 'custom') {
+          return <React.Fragment key={item.key}>{item.content}</React.Fragment>;
+        }
+        return (
+          <DropdownItem
+            key={item.key}
+            icon={item.icon}
+            label={item.label}
+            variant={item.variant}
             onClick={() => {
-              onNavigate(node.id);
+              item.onClick();
               onClose();
             }}
-            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
-          >
-            <FolderOpen className="w-4 h-4 text-accent-purple" />
-            <span>Open Folder</span>
-          </button>
-
-          {onCreateSubfolder && (
-            <button
-              onClick={() => {
-                onCreateSubfolder(node);
-                onClose();
-              }}
-              className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
-            >
-              <FolderPlus className="w-4 h-4 text-accent-purple" />
-              <span>Create Subfolder</span>
-            </button>
-          )}
-        </>
-      )}
-
-      <button
-        onClick={() => {
-          onReveal(node.path);
-          onClose();
-        }}
-        className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
-      >
-        <ExternalLink className="w-4 h-4 text-accent-blue" />
-        <span>Reveal in File Manager</span>
-      </button>
-
-      <button
-        onClick={() => {
-          onOpenInTerminal(node.path);
-          onClose();
-        }}
-        className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
-      >
-        <Terminal className="w-4 h-4 text-emerald-400" />
-        <span>Open in Terminal</span>
-      </button>
-
-      <button
-        onClick={() => {
-          onCopyPath(node.path);
-          onClose();
-        }}
-        className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-slate-200 hover:bg-accent-purple/20 hover:text-white transition-all cursor-pointer font-medium"
-      >
-        <Copy className="w-4 h-4 text-accent-pink" />
-        <span>Copy Path</span>
-      </button>
-
-      <div className="h-px bg-surface-border my-1" />
-
-      {isProtected ? (
-        <div className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center gap-2 text-[11px] font-semibold">
-          <ShieldAlert className="w-4 h-4 shrink-0" />
-          <span>Protected System Path</span>
-        </div>
-      ) : (
-        <button
-          onClick={() => {
-            onDelete(node);
-            onClose();
-          }}
-          className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-all cursor-pointer font-medium"
-        >
-          <Trash2 className="w-4 h-4" />
-          <span>Move to Trash</span>
-        </button>
-      )}
-    </div>
+          />
+        );
+      })}
+    </Dropdown>
   );
 });

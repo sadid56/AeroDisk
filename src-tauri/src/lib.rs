@@ -136,11 +136,73 @@ fn open_in_terminal(target_path: String) -> Result<(), String> {
 
     #[cfg(target_os = "linux")]
     {
-        std::process::Command::new("x-terminal-emulator")
+        // 1. Try $TERMINAL environment variable if set by user
+        if let Ok(env_term) = std::env::var("TERMINAL") {
+            if !env_term.trim().is_empty() {
+                if let Ok(status) = std::process::Command::new(&env_term)
+                    .current_dir(&dir_path)
+                    .status()
+                {
+                    if status.success() {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        // 2. Try xdg-terminal-exec (Freedesktop default terminal specification)
+        if let Ok(status) = std::process::Command::new("xdg-terminal-exec")
+            .current_dir(&dir_path)
+            .status()
+        {
+            if status.success() {
+                return Ok(());
+            }
+        }
+
+        // 3. Try sensible-terminal
+        if std::process::Command::new("sensible-terminal")
             .current_dir(&dir_path)
             .spawn()
-            .map_err(|e| format!("Failed to open terminal: {}", e))?;
-        Ok(())
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        // 4. Try x-terminal-emulator
+        if std::process::Command::new("x-terminal-emulator")
+            .current_dir(&dir_path)
+            .spawn()
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        // 5. Fallback list of popular Linux terminal emulators
+        let fallback_terminals = [
+            "ptyxis",
+            "gnome-terminal",
+            "konsole",
+            "xfce4-terminal",
+            "alacritty",
+            "kitty",
+            "foot",
+            "terminator",
+            "tilix",
+            "xterm",
+        ];
+
+        for term in fallback_terminals.iter() {
+            if std::process::Command::new(term)
+                .current_dir(&dir_path)
+                .spawn()
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+
+        Err("Failed to open terminal: Could not launch system terminal emulator".to_string())
     }
 }
 

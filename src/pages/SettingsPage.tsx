@@ -2,6 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getVersion } from '@tauri-apps/api/app';
 import { Settings, Type, Palette, Check, Sun, Moon, Laptop } from "lucide-react";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { PageHeader } from "../components/common/PageHeader";
+import { Container } from "../components/common/Container";
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 
@@ -29,20 +33,24 @@ export function applyThemeMode(mode: ThemeMode) {
   const root = document.documentElement;
 
   if (isDark) {
-    root.style.setProperty('--bg-color', '#09090b');
-    root.style.setProperty('--surface-color', '#121217');
-    root.style.setProperty('--surface-hover-color', '#1a1a23');
-    root.style.setProperty('--surface-border-color', '#242432');
+    root.style.setProperty("--bg-color", "#1a1a2e");
+    root.style.setProperty("--surface-color", "#1e1e33");
+    root.style.setProperty("--surface-hover-color", "#262640");
+    root.style.setProperty("--surface-border-color", "#2e2e48");
     root.style.setProperty('--text-color', '#f1f5f9');
     root.style.setProperty('--text-primary', '#f8fafc');
     root.style.setProperty('--text-secondary', '#cbd5e1');
     root.style.setProperty('--text-muted', '#94a3b8');
     root.style.setProperty('--accent-purple-color', '#8b5cf6');
     root.style.setProperty('--accent-blue-color', '#3b82f6');
+    root.style.setProperty('--btn-primary-bg', '#334155');
+    root.style.setProperty('--btn-primary-hover', '#475569');
+    root.style.setProperty('--btn-primary-text', '#f8fafc');
+    root.style.setProperty('--btn-primary-border', '#475569');
   } else {
-    root.style.setProperty('--bg-color', '#ffffff');
-    root.style.setProperty('--surface-color', '#f8fafc');
-    root.style.setProperty('--surface-hover-color', '#f1f5f9');
+    root.style.setProperty('--bg-color', '#f1f5f9');
+    root.style.setProperty('--surface-color', '#ffffff');
+    root.style.setProperty('--surface-hover-color', '#e2e8f0');
     root.style.setProperty('--surface-border-color', '#cbd5e1');
     root.style.setProperty('--text-color', '#0f172a');
     root.style.setProperty('--text-primary', '#020617');
@@ -50,6 +58,10 @@ export function applyThemeMode(mode: ThemeMode) {
     root.style.setProperty('--text-muted', '#64748b');
     root.style.setProperty('--accent-purple-color', '#7c3aed');
     root.style.setProperty('--accent-blue-color', '#2563eb');
+    root.style.setProperty('--btn-primary-bg', '#1e293b');
+    root.style.setProperty('--btn-primary-hover', '#334155');
+    root.style.setProperty('--btn-primary-text', '#ffffff');
+    root.style.setProperty('--btn-primary-border', '#1e293b');
   }
 
   localStorage.setItem('aerodisk_theme_mode', mode);
@@ -87,8 +99,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
   }, []);
 
   useEffect(() => {
-    const savedFont = localStorage.getItem("aerodisk_font");
-    const savedMode = (localStorage.getItem("aerodisk_theme_mode") as ThemeMode) || "dark";
+    const savedFont = localStorage.getItem("hyperdisk_font");
+    const savedMode = (localStorage.getItem("hyperdisk_theme_mode") as ThemeMode) || "dark";
 
     if (savedFont) {
       setSelectedFont(savedFont);
@@ -104,7 +116,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
-      const currentMode = (localStorage.getItem("aerodisk_theme_mode") as ThemeMode) || "dark";
+      const currentMode = (localStorage.getItem("hyperdisk_theme_mode") as ThemeMode) || "dark";
       if (currentMode === "system") {
         applyThemeMode("system");
       }
@@ -160,18 +172,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
   ];
 
   return (
-    <div className='flex-1 overflow-y-auto bg-background bg-glow p-6 sm:p-10 select-none'>
-      <div className='max-w-4xl mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-150'>
-        <div className='flex items-center justify-between border-b border-surface-border pb-6'>
-          <div className='flex items-center gap-4'>
-            <div className='flex items-center gap-3'>
-              <Settings className='w-5 h-5' />
-              <h1 className='text-xl font-bold'>Settings & Configuration</h1>
-            </div>
-          </div>
-        </div>
+    <div className='flex-1 overflow-y-auto bg-background py-6 sm:py-10 select-none'>
+      <Container maxWidth='6xl' className='space-y-8 animate-in fade-in zoom-in-95 duration-150'>
+        <PageHeader
+          title='Settings & Configuration'
+          subtitle='Customize HyperDisk preferences, themes, and system font parameters'
+          onBack={() => navigate("/")}
+        />
 
-        <section className='bg-surface/60 border border-surface-border rounded-2xl p-6 space-y-4'>
+        <Card className='space-y-4'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-2.5'>
               <Palette className='w-5 h-5' />
@@ -187,11 +196,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
               const isSelected = themeMode === opt.mode;
 
               return (
-                <button
+                <Card
                   key={opt.mode}
+                  as='button'
+                  variant='interactive'
+                  selected={isSelected}
                   onClick={() => handleThemeChange(opt.mode)}
-                  className={`p-5 rounded-2xl border text-xs text-left transition-all flex flex-col justify-between gap-4 cursor-pointer bg-background/60 border-surface-border hover:bg-surface-hover hover:border-slate-500
-                  `}
+                  className='text-xs flex flex-col justify-between gap-4'
                 >
                   <div className='flex items-center justify-between w-full'>
                     <div className='w-10 h-10 rounded-xl bg-surface border border-surface-border flex items-center justify-center'>
@@ -204,13 +215,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
                     <h3 className='font-bold text-sm block'>{opt.label}</h3>
                     <p className='text-[11px] opacity-70 mt-1 leading-relaxed'>{opt.desc}</p>
                   </div>
-                </button>
+                </Card>
               );
             })}
           </div>
-        </section>
+        </Card>
 
-        <section className='bg-surface/60 border border-surface-border rounded-2xl p-6 space-y-4'>
+        <Card className='space-y-4'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-2.5'>
               <Type className='w-5 h-5' />
@@ -222,42 +233,43 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
             {systemFonts.map((font) => {
               const isSelected = selectedFont === font;
               return (
-                <button
+                <Card
                   key={font}
+                  as='button'
+                  variant='interactive'
+                  selected={isSelected}
+                  padding='sm'
                   onClick={() => handleFontChange(font)}
-                  style={{ fontFamily: `"${font}", system-ui, sans-serif` }}
-                  className={`p-3 rounded-xl border text-xs font-medium text-left truncate transition-all flex items-center justify-between cursor-pointer bg-background/60 border-surface-border hover:bg-surface-hover hover:border-slate-500`}
+                  style={{ fontFamily: `"${font}", sans-serif` }}
+                  className='text-xs flex items-center justify-between'
                 >
                   <span className='truncate'>{font}</span>
-                  {isSelected && <Check className='w-5 h-5  shrink-0' />}
-                </button>
+                  {isSelected && <Check className='w-3.5 h-3.5 text-accent-purple shrink-0 ml-1' />}
+                </Card>
               );
             })}
           </div>
-        </section>
+        </Card>
 
-        <section className='bg-surface/60 border border-surface-border rounded-2xl p-6 space-y-4'>
+        <Card className='space-y-4'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-2.5'>
-              <Settings className='w-5 h-5 text-accent-purple' />
+              <Settings className='w-5 h-5' />
               <h2 className='text-sm font-bold'>System & Updates</h2>
             </div>
           </div>
 
-          <div className='p-4 bg-background/40 border border-surface-border rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+          <div className='flex items-center justify-between p-4 bg-background/50 border border-surface-border rounded-xl'>
             <div>
               <h3 className='font-bold text-xs text-text-primary'>Current Version: v{appVersion}</h3>
               <p className='text-[10px] text-text-muted mt-0.5'>Check release status and manage download parameters</p>
             </div>
-            <button
-              onClick={() => navigate('/updates')}
-              className='px-4 py-2 rounded-xl border border-surface-border bg-background hover:bg-surface-hover text-xs font-bold text-text-secondary hover:text-text-primary transition-all cursor-pointer'
-            >
+            <Button variant='outline' onClick={() => navigate("/updates")}>
               Check & Manage Updates
-            </button>
+            </Button>
           </div>
-        </section>
-      </div>
+        </Card>
+      </Container>
     </div>
   );
 });

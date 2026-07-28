@@ -18,6 +18,16 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+export function formatDate(timestamp?: number): string {
+  if (!timestamp) return '';
+  const date = new Date(timestamp * 1000);
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export function truncate(str: string, n: number): string {
   return str.length > n ? str.slice(0, n - 1) + '…' : str;
 }

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useCreateFolder } from '../hooks/useCreateFolder';
-import { FolderPlus, X, Loader2 } from 'lucide-react';
+import { FolderPlus, X } from "lucide-react";
 import { showToast } from '../providers/ToastProvider';
 import { FileNode } from '../types';
+import { Button } from "./ui/Button";
 
 interface CreateFolderModalProps {
   isOpen: boolean;
@@ -61,72 +62,57 @@ export const CreateFolderModal: React.FC<CreateFolderModalProps> = React.memo(({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-md bg-surface border border-surface-border rounded-2xl shadow-2xl p-6 space-y-4">
-        
+    <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-in fade-in duration-150 select-none'>
+      <div className='w-full max-w-md bg-surface border border-surface-border rounded-2xl shadow-2xl p-6 space-y-4'>
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-surface-border pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-accent-purple/15 border border-accent-purple/30 text-accent-purple flex items-center justify-center">
-              <FolderPlus className="w-5 h-5" />
+        <div className='flex items-center justify-between border-b border-surface-border pb-3'>
+          <div className='flex items-center gap-2.5'>
+            <div className='w-9 h-9 rounded-xl bg-accent-purple/15 border border-accent-purple/30 text-accent-purple flex items-center justify-center'>
+              <FolderPlus className='w-5 h-5' />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-100">Create New Folder</h2>
-              <p className="text-xs text-slate-400 font-mono truncate max-w-[240px]" title={parentFolder.path}>
+              <h2 className='text-sm font-bold text-slate-100'>Create New Folder</h2>
+              <p className='text-xs text-slate-400 font-mono truncate max-w-50' title={parentFolder.path}>
                 In {parentFolder.name}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-surface-hover">
-            <X className="w-4 h-4" />
-          </button>
+          <Button variant='ghost' size='icon' onClick={onClose}>
+            <X className='w-4 h-4' />
+          </Button>
         </div>
 
         {/* Input Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">Folder Name</label>
+        <form onSubmit={handleSubmit} className='space-y-4'>
+          <div className='space-y-1.5'>
+            <label className='text-xs font-semibold text-slate-300'>Folder Name</label>
             <input
               ref={inputRef}
-              type="text"
+              type='text'
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
-              placeholder="e.g. My_Folder"
+              placeholder='e.g. My_Folder'
               disabled={isCreating}
-              className="w-full px-3 py-2 rounded-xl bg-background border border-surface-border text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-accent-purple font-medium"
+              className='w-full px-3 py-2 rounded-xl bg-background border border-surface-border text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-accent-purple font-medium'
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isCreating}
-              className="px-4 py-2 rounded-xl bg-surface border border-surface-border text-slate-300 hover:bg-surface-hover text-xs font-medium cursor-pointer"
-            >
+          <div className='flex justify-end gap-2 pt-2'>
+            <Button type='button' variant='secondary' onClick={onClose} disabled={isCreating}>
               Cancel
-            </button>
+            </Button>
 
-            <button
-              type="submit"
-              disabled={isCreating || !folderName.trim()}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent-purple to-accent-blue text-white text-xs font-semibold shadow-md hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+            <Button
+              type='submit'
+              variant='primary'
+              isLoading={isCreating}
+              disabled={!folderName.trim()}
+              leftIcon={<FolderPlus className='w-3.5 h-3.5' />}
             >
-              {isCreating ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Creating...</span>
-                </>
-              ) : (
-                <>
-                  <FolderPlus className="w-3.5 h-3.5" />
-                  <span>Create Folder</span>
-                </>
-              )}
-            </button>
+              Create Folder
+            </Button>
           </div>
         </form>
-
       </div>
     </div>
   );

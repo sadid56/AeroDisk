@@ -5,7 +5,9 @@ import { useScanner } from "./hooks/useScanner";
 import { useDiskInfo } from "./hooks/useDiskInfo";
 import { Header } from "./components/Header";
 import { ContextMenu } from "./components/ContextMenu";
-import { DeleteModal } from "./components/DeleteModal";
+import { AlertModal } from "./components/ui/AlertModal";
+import { AlertTriangle, ShieldAlert } from "lucide-react";
+import { useProtectedPath } from "./hooks/useProtectedPath";
 import { CreateFolderModal } from "./components/CreateFolderModal";
 import { SearchModal } from "./components/SearchModal";
 import { ToastProvider, showToast } from "./providers/ToastProvider";
@@ -14,6 +16,7 @@ import { useAutoUpdater } from "./hooks/useAutoUpdater";
 import { UpdateModal } from "./components/UpdateModal";
 import { applyThemeMode, applyFont, ThemeMode } from "./pages/SettingsPage";
 import { FileNode } from "./types";
+import { getFullPath } from "./utils/pathUtils";
 
 export const App: React.FC = () => {
   const updater = useAutoUpdater();
@@ -44,13 +47,14 @@ export const App: React.FC = () => {
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
   const [pendingDeleteNode, setPendingDeleteNode] = useState<FileNode | null>(null);
+  const { isProtected: trashIsProtected } = useProtectedPath(pendingDeleteNode ? getFullPath(pendingDeleteNode.id, flatNodes) : undefined);
   const [createFolderTarget, setCreateFolderTarget] = useState<FileNode | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    const savedMode = (localStorage.getItem("aerodisk_theme_mode") as ThemeMode) || "dark";
-    const savedFont = localStorage.getItem("aerodisk_font");
+    const savedMode = (localStorage.getItem("hyperdisk_theme_mode") as ThemeMode) || "dark";
+    const savedFont = localStorage.getItem("hyperdisk_font");
     applyThemeMode(savedMode);
     if (savedFont) applyFont(savedFont);
   }, []);
@@ -96,7 +100,7 @@ export const App: React.FC = () => {
     setIsDeleting(true);
 
     try {
-      await invoke("delete_target_item", { targetPath: pendingDeleteNode.path });
+      await invoke("delete_target_item", { targetPath: getFullPath(pendingDeleteNode.id, flatNodes) });
       removeNode(pendingDeleteNode.id);
 
       if (currentId === pendingDeleteNode.id) {
@@ -172,9 +176,7 @@ export const App: React.FC = () => {
     showToast({ message: "Copied", description: "Path copied to clipboard", type: "success" });
   }, []);
 
-  const handleCopyPathNotification = useCallback(() => {
-    showToast({ message: "Copied", description: "Path copied to clipboard", type: "success" });
-  }, []);
+
 
   const handleCancelDelete = useCallback(() => {
     setPendingDeleteNode(null);
@@ -228,7 +230,6 @@ export const App: React.FC = () => {
         onSelectNode={handleSelectNode}
         onNavigate={handleNavigateTo}
         onContextMenu={handleContextMenu}
-        onCopyPath={handleCopyPathNotification}
         onScanPath={handleScanPath}
         updater={updater}
       />
@@ -238,6 +239,7 @@ export const App: React.FC = () => {
           x={contextMenu.x}
           y={contextMenu.y}
           node={contextMenu.node}
+          flatNodes={flatNodes}
           onClose={handleCloseContextMenu}
           onNavigate={handleNavigateTo}
           onReveal={handleReveal}
@@ -248,12 +250,40 @@ export const App: React.FC = () => {
         />
       )}
 
-      <DeleteModal
-        node={pendingDeleteNode}
-        onConfirm={handleConfirmDelete}
-        onCancel={handleCancelDelete}
-        isDeleting={isDeleting}
-      />
+      {pendingDeleteNode && (
+        <AlertModal
+          isOpen={Boolean(pendingDeleteNode)}
+          title={trashIsProtected ? "Protected System Directory" : "Move Item to Trash?"}
+          subtitle={pendingDeleteNode.name}
+          icon={trashIsProtected ? <ShieldAlert className='w-5 h-5' /> : <AlertTriangle className='w-5 h-5' />}
+          variant='danger'
+          confirmLabel='Confirm Delete'
+          cancelLabel='Cancel'
+          isLoading={isDeleting}
+          confirmDisabled={trashIsProtected}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+          message={
+            trashIsProtected ? (
+              <div className='p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs leading-relaxed space-y-1'>
+                <p className='font-semibold flex items-center gap-1.5'>
+                  <ShieldAlert className='w-4 h-4 text-amber-400' />
+                  Deletion Disabled
+                </p>
+                <p className='opacity-90'>
+                  This path is a critical system directory (<span className='font-mono'>{getFullPath(pendingDeleteNode.id, flatNodes)}</span>). Deletion is
+                  disabled to protect system integrity.
+                </p>
+              </div>
+            ) : (
+              <p className='text-xs text-slate-300 leading-relaxed'>
+                Are you sure you want to move <span className='font-semibold text-slate-100'>{pendingDeleteNode.name}</span> to the system
+                trash? This item can be restored from your trash bin.
+              </p>
+            )
+          }
+        />
+      )}
 
       <CreateFolderModal
         isOpen={Boolean(createFolderTarget)}

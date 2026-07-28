@@ -34,7 +34,7 @@ export function useAutoUpdater() {
         setUpdateAvailable(true);
 
         // Check if the user has skipped this specific version
-        const skippedVersion = localStorage.getItem("aerodisk_skipped_version");
+        const skippedVersion = localStorage.getItem("hyperdisk_skipped_version");
         if (isManual || skippedVersion !== updateResult.version) {
           setShowModal(true);
         }
@@ -48,7 +48,7 @@ export function useAutoUpdater() {
         if (isManual) {
           showToast({
             message: "App is Up to Date",
-            description: "You are running the latest version of AeroDisk.",
+            description: "You are running the latest version of HyperDisk.",
             type: "success",
           });
         }
@@ -104,20 +104,20 @@ export function useAutoUpdater() {
             setProgressPercent(100);
             showToast({
               message: "Update Installed!",
-              description: "Relaunching AeroDisk to apply updates...",
+              description: "Relaunching HyperDisk to apply updates...",
               type: "success",
               duration: 4000,
             });
 
             // Record this installation in history log
-            const historyJson = localStorage.getItem("aerodisk_update_history") || "[]";
+            const historyJson = localStorage.getItem("hyperdisk_update_history") || "[]";
             try {
               const history = JSON.parse(historyJson);
               history.push({
                 version: updateRef?.current?.version,
                 installedAt: new Date().toISOString(),
               });
-              localStorage.setItem("aerodisk_update_history", JSON.stringify(history));
+              localStorage.setItem("hyperdisk_update_history", JSON.stringify(history));
             } catch {
               // Ignore history recording failures
             }
@@ -142,7 +142,7 @@ export function useAutoUpdater() {
 
   const skipUpdate = useCallback(() => {
     if (updateInfo) {
-      localStorage.setItem("aerodisk_skipped_version", updateInfo.version);
+      localStorage.setItem("hyperdisk_skipped_version", updateInfo.version);
     }
     setShowModal(false);
   }, [updateInfo]);
