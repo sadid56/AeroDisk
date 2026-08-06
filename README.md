@@ -13,6 +13,12 @@ HyperDisk is a high-performance desktop disk usage analyzer built to help you in
 
 ---
 
+## Installation
+
+For macOS users, please follow the step-by-step [macOS Installation & Permission Guide](INSTALL.md) to install the app, bypass Gatekeeper, and configure Full Disk Access.
+
+---
+
 ## How to Use It
 
 1. Open HyperDisk.
