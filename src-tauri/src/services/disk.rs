@@ -372,15 +372,34 @@ pub fn list_directory_entries(target_path: &str) -> Result<Vec<DirectoryEntry>, 
 pub fn has_full_disk_access() -> bool {
     #[cfg(target_os = "macos")]
     {
-        if let Ok(home) = std::env::var("HOME") {
-            let path = std::path::Path::new(&home).join("Library/Mail");
-            match std::fs::read_dir(path) {
-                Ok(_) => true,
-                Err(err) => err.kind() != std::io::ErrorKind::PermissionDenied,
-            }
-        } else {
-            false
+        // 1. Try to read Time Machine preferences plist (restricted system file)
+        let tm_path = std::path::Path::new("/Library/Preferences/com.apple.TimeMachine.plist");
+        match std::fs::File::open(tm_path) {
+            Ok(_) => return true,
+            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return false,
+            _ => {}
         }
+
+        // 2. Try to read Library/Mail
+        if let Ok(home) = std::env::var("HOME") {
+            let mail_path = std::path::Path::new(&home).join("Library/Mail");
+            match std::fs::read_dir(&mail_path) {
+                Ok(_) => return true,
+                Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return false,
+                _ => {}
+            }
+
+            // 3. Try to read Library/Safari
+            let safari_path = std::path::Path::new(&home).join("Library/Safari");
+            match std::fs::read_dir(&safari_path) {
+                Ok(_) => return true,
+                Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => return false,
+                _ => {}
+            }
+        }
+
+        // Fallback
+        false
     }
     #[cfg(not(target_os = "macos"))]
     {

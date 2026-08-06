@@ -264,6 +264,23 @@ impl Scanner {
         false
     }
 
+    fn is_always_skipped_path(path: &Path) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            let path_str = path.to_string_lossy().to_lowercase();
+            path_str.contains(".photoslibrary")
+                || path_str.contains(".musiclibrary")
+                || path_str.contains("library/mail")
+                || path_str.contains("library/messages")
+                || path_str.contains("library/safari")
+                || path_str.contains("library/homekit")
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            false
+        }
+    }
+
     fn is_protected_tcc_path(path: &Path, home: &Option<PathBuf>, home_canonical: &Option<PathBuf>) -> bool {
         #[cfg(target_os = "macos")]
         {
@@ -276,10 +293,6 @@ impl Scanner {
                         || rel_str == "Pictures"
                         || rel_str == "Movies"
                         || rel_str == "Music"
-                        || rel_str.starts_with("Library/Mail")
-                        || rel_str.starts_with("Library/Messages")
-                        || rel_str.starts_with("Library/Safari")
-                        || rel_str.starts_with("Library/HomeKit")
                     {
                         return true;
                     }
@@ -315,8 +328,10 @@ impl Scanner {
     ) -> RawDir {
         let has_fda = crate::services::disk::has_full_disk_access();
 
-        let should_bypass = if cfg!(target_os = "macos") && !has_fda {
-            if dir != target_path {
+        let should_bypass = if cfg!(target_os = "macos") {
+            if Self::is_always_skipped_path(dir) {
+                true
+            } else if !has_fda && dir != target_path {
                 Self::is_protected_tcc_path(dir, home, home_canonical)
             } else {
                 false
