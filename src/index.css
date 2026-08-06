@@ -80,9 +80,7 @@
 
 /* Ambient Glow Overlay */
 .bg-glow {
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.06) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 50%);
+  background-image: none;
 }
 
 /* Skeleton shimmer animation for loading states */

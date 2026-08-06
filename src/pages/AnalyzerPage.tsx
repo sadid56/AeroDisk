@@ -3,13 +3,12 @@ import { StorageOverview } from "../components/StorageOverview";
 import { SunburstChart } from "../components/SunburstChart";
 import { FileList } from "../components/FileList";
 import { FocusCard } from "../components/FocusCard";
-import { FileNode, DiskSpaceInfo } from "../types";
+import { FileNode } from "../types";
 
 interface AnalyzerPageProps {
   flatNodes: FileNode[];
   currentId: number | null;
   breadcrumbIds: number[];
-  diskInfo: DiskSpaceInfo | null;
   hoveredNode: FileNode | null;
   selectedNode: FileNode | null;
   activeNode: FileNode | null;
@@ -28,7 +27,6 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = React.memo(
     flatNodes,
     currentId,
     breadcrumbIds,
-    diskInfo,
     hoveredNode,
     selectedNode,
     activeNode,
@@ -44,7 +42,6 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = React.memo(
     return (
       <div className='flex-1 flex flex-col min-h-0 animate-in fade-in duration-150'>
         <StorageOverview
-          diskInfo={diskInfo}
           activeNode={activeNode}
           flatNodes={flatNodes}
           breadcrumbIds={breadcrumbIds}

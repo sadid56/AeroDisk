@@ -3,11 +3,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { useNavigate } from "react-router-dom";
 import { useScanner } from "./hooks/useScanner";
 import { useDiskInfo } from "./hooks/useDiskInfo";
-import { Header } from "./components/Header";
+import { useSystemDrives } from "./hooks/useSystemDrives";
 import { ContextMenu } from "./components/ContextMenu";
 import { AlertModal } from "./components/ui/AlertModal";
-import { AlertTriangle, ShieldAlert } from "lucide-react";
-import { useProtectedPath } from "./hooks/useProtectedPath";
 import { CreateFolderModal } from "./components/CreateFolderModal";
 import { SearchModal } from "./components/SearchModal";
 import { ToastProvider, showToast } from "./providers/ToastProvider";
@@ -17,9 +15,15 @@ import { UpdateModal } from "./components/UpdateModal";
 import { applyThemeMode, applyFont, ThemeMode } from "./pages/SettingsPage";
 import { FileNode } from "./types";
 import { getFullPath } from "./utils/pathUtils";
+import { useToolsData } from "./hooks/useToolsData";
+import { useProtectedPath } from "./hooks/useProtectedPath";
+import { LeftSidebar } from "./layout/LeftSidebar";
+import { AlertTriangle, ShieldAlert } from "lucide-react";
+import { Header } from "./layout/Header";
 
 export const App: React.FC = () => {
   const updater = useAutoUpdater();
+  const { updateAvailable } = updater;
   const {
     flatNodes,
     currentId,
@@ -42,8 +46,11 @@ export const App: React.FC = () => {
   } = useScanner();
 
   const navigate = useNavigate();
+
   const rootPath = flatNodes[0]?.path;
-  const { diskInfo, refreshDiskInfo } = useDiskInfo(rootPath);
+  const { refreshDiskInfo } = useDiskInfo(rootPath);
+  const { drives, folders, refetch: refetchDrives } = useSystemDrives();
+  const { largeFiles, cleanupSuggestions, duplicateGroups, loading: toolsLoading, refetchTools } = useToolsData();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
   const [pendingDeleteNode, setPendingDeleteNode] = useState<FileNode | null>(null);
@@ -61,13 +68,23 @@ export const App: React.FC = () => {
 
   const handleScanPath = useCallback(async (path: string) => {
     try {
-      navigate("/");
+      navigate("/analyzer");
+      let finalPath = path;
       if (path.startsWith("~")) {
         const home = await invoke<string>("get_home_folder");
-        const resolved = path.replace("~", home);
-        await startScan(resolved);
-      } else {
-        await startScan(path);
+        finalPath = path.replace("~", home);
+      }
+      await startScan(finalPath);
+
+      // Save to recent scans
+      try {
+        const historyJson = localStorage.getItem("hyperdisk_scan_history") || "[]";
+        const history: string[] = JSON.parse(historyJson);
+        const filtered = history.filter((p) => p !== finalPath);
+        filtered.unshift(finalPath);
+        localStorage.setItem("hyperdisk_scan_history", JSON.stringify(filtered.slice(0, 10)));
+      } catch (e) {
+        console.error(e);
       }
     } catch (err: any) {
       showToast({ message: "Scan Error", description: err?.message || String(err), type: "error" });
@@ -118,22 +135,16 @@ export const App: React.FC = () => {
       setIsDeleting(false);
       setPendingDeleteNode(null);
     }
-  }, [pendingDeleteNode, removeNode, currentId, navigateTo, rootPath, refreshDiskInfo]);
+  }, [pendingDeleteNode, removeNode, currentId, navigateTo, rootPath, refreshDiskInfo, flatNodes]);
 
   const handleSelectFolder = useCallback(() => {
-    navigate("/");
+    navigate("/analyzer");
     selectFolderDialog();
   }, [navigate, selectFolderDialog]);
 
   const handleDashboard = useCallback(() => {
     resetToDashboard();
   }, [resetToDashboard]);
-
-  const handleCreateFolder = useCallback(() => {
-    if (activeNode) {
-      setCreateFolderTarget(activeNode);
-    }
-  }, [activeNode]);
 
   const handleRescan = useCallback(() => {
     rootPath && startScan(rootPath);
@@ -176,8 +187,6 @@ export const App: React.FC = () => {
     showToast({ message: "Copied", description: "Path copied to clipboard", type: "success" });
   }, []);
 
-
-
   const handleCancelDelete = useCallback(() => {
     setPendingDeleteNode(null);
   }, []);
@@ -201,39 +210,57 @@ export const App: React.FC = () => {
   }, []);
 
   return (
-    <div className='h-screen w-screen flex flex-col bg-background bg-glow overflow-hidden font-sans text-slate-100'>
-      <Header
-        onSelectFolder={handleSelectFolder}
-        onDashboard={handleDashboard}
-        onCreateFolder={handleCreateFolder}
-        onRescan={handleRescan}
-        onOpenSearchModal={handleOpenSearchModal}
-        isScanning={isScanning}
-        hasScanData={hasScanData}
-        updateAvailable={updater.updateAvailable}
-      />
+    <div className='h-screen w-screen flex bg-background text-slate-100 overflow-hidden font-sans select-none'>
+      {/* Left Sidebar navigation component */}
+      <LeftSidebar onDashboard={handleDashboard} />
 
-      <AppRoutes
-        isScanning={isScanning}
-        hasScanData={hasScanData}
-        scanCount={scanCount}
-        scanStatusPath={scanStatusPath}
-        flatNodes={flatNodes}
-        currentId={currentId}
-        breadcrumbIds={breadcrumbIds}
-        diskInfo={diskInfo}
-        hoveredNode={hoveredNode}
-        selectedNode={selectedNode}
-        activeNode={activeNode}
-        searchQuery={searchQuery}
-        onHoverNode={handleHoverNode}
-        onSelectNode={handleSelectNode}
-        onNavigate={handleNavigateTo}
-        onContextMenu={handleContextMenu}
-        onScanPath={handleScanPath}
-        updater={updater}
-      />
+      {/* ─── MAIN COLUMN ──────────────────────────────────────────────────── */}
+      <main className='flex-1 flex flex-col min-w-0 bg-background'>
+        {/* Top Header Bar */}
+        <Header
+          onSelectFolder={handleSelectFolder}
+          onDashboard={handleDashboard}
+          onOpenSearchModal={handleOpenSearchModal}
+          isScanning={isScanning}
+          hasScanData={hasScanData}
+          updateAvailable={updateAvailable}
+          onRefresh={() => {
+            refetchDrives();
+            handleRescan();
+          }}
+        />
 
+        {/* Dynamic App Content Route */}
+        <AppRoutes
+          isScanning={isScanning}
+          hasScanData={hasScanData}
+          scanCount={scanCount}
+          scanStatusPath={scanStatusPath}
+          flatNodes={flatNodes}
+          currentId={currentId}
+          breadcrumbIds={breadcrumbIds}
+          hoveredNode={hoveredNode}
+          selectedNode={selectedNode}
+          activeNode={activeNode}
+          searchQuery={searchQuery}
+          onHoverNode={handleHoverNode}
+          onSelectNode={handleSelectNode}
+          onNavigate={handleNavigateTo}
+          onContextMenu={handleContextMenu}
+          onScanPath={handleScanPath}
+          onSelectFolder={handleSelectFolder}
+          updater={updater}
+          drives={drives}
+          folders={folders}
+          largeFiles={largeFiles}
+          cleanupSuggestions={cleanupSuggestions}
+          duplicateGroups={duplicateGroups}
+          toolsLoading={toolsLoading}
+          onRefreshTools={refetchTools}
+        />
+      </main>
+
+      {/* Modal overlays */}
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
@@ -271,8 +298,9 @@ export const App: React.FC = () => {
                   Deletion Disabled
                 </p>
                 <p className='opacity-90'>
-                  This path is a critical system directory (<span className='font-mono'>{getFullPath(pendingDeleteNode.id, flatNodes)}</span>). Deletion is
-                  disabled to protect system integrity.
+                  This path is a critical system directory (
+                  <span className='font-mono'>{getFullPath(pendingDeleteNode.id, flatNodes)}</span>). Deletion is disabled to protect system
+                  integrity.
                 </p>
               </div>
             ) : (
@@ -298,6 +326,7 @@ export const App: React.FC = () => {
         flatNodes={flatNodes}
         onNavigate={handleNavigateTo}
         onSelectNode={handleSelectNode}
+        onScanPath={handleScanPath}
       />
 
       <UpdateModal

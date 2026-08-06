@@ -301,12 +301,12 @@ export function useScanner() {
   }, [currentId, flatNodes, navigateTo]);
 
   const activeNode =
-    currentId !== null ? flatNodes[currentId] : flatNodes.find((node) => node && node.parentId === null) || flatNodes[0] || null;
+    currentId !== null ? flatNodes[currentId] : flatNodes[0] || null;
 
   useEffect(() => {
     if (rootInitializedRef.current) return;
 
-    const rootNode = flatNodes.find((node) => node && node.parentId === null) || flatNodes[0];
+    const rootNode = flatNodes[0];
     if (!rootNode) return;
 
     rootInitializedRef.current = true;

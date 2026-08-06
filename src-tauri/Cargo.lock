@@ -1594,6 +1594,7 @@ dependencies = [
 name = "hyperdisk"
 version = "2.0.0"
 dependencies = [
+ "libc",
  "rayon",
  "serde",
  "serde_json",

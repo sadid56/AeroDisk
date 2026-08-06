@@ -1,41 +1,13 @@
-use serde::{Deserialize, Serialize};
+use crate::models::{
+    DirectoryEntry, DiskSpaceInfo, SystemDrive, UserFolder
+};
+use tauri::Manager;
+use rayon::prelude::*;
 #[cfg(target_os = "linux")]
 use std::collections::HashSet;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use sysinfo::Disks;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct DiskSpaceInfo {
-    pub total: u64,
-    pub available: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SystemDrive {
-    pub name: String,
-    pub mount_point: String,
-    pub total_space: u64,
-    pub available_space: u64,
-    pub file_system: String,
-    pub is_removable: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct UserFolder {
-    pub name: String,
-    pub path: String,
-    pub exists: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct DirectoryEntry {
-    pub name: String,
-    pub path: String,
-    pub is_directory: bool,
-    pub size: u64,
-}
 
 const PSEUDO_FILESYSTEMS: &[&str] = &[
     "binderfs",
@@ -200,7 +172,6 @@ fn linux_existing_device_names(drives: &[SystemDrive]) -> HashSet<String> {
         .collect()
 }
 
-
 #[cfg(target_os = "linux")]
 fn collect_linux_removable_drives(drives: &mut Vec<SystemDrive>) {
     let seen = linux_existing_device_names(drives);
@@ -240,6 +211,8 @@ fn collect_linux_removable_drives(drives: &mut Vec<SystemDrive>) {
             available_space,
             file_system,
             is_removable: true,
+            is_read_only: false,
+            smart_status: String::from("Unknown"),
         });
     }
 }
@@ -328,11 +301,13 @@ pub fn get_system_drives() -> Vec<SystemDrive> {
 
         drives.push(SystemDrive {
             name,
-            mount_point: mount_str,
+            mount_point: mount_str.clone(),
             total_space: disk.total_space(),
             available_space: disk.available_space(),
             file_system,
             is_removable: external_like,
+            is_read_only: disk.is_read_only(),
+            smart_status: get_disk_smart_status(&mount_str),
         });
     }
 
@@ -394,34 +369,114 @@ pub fn list_directory_entries(target_path: &str) -> Result<Vec<DirectoryEntry>, 
     Ok(entries)
 }
 
-pub fn get_user_folders() -> Vec<UserFolder> {
-    let home = env::var("HOME").or_else(|_| env::var("USERPROFILE")).unwrap_or_default();
-    if home.is_empty() {
-        return Vec::new();
+pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
+    let mut paths = Vec::new();
+    
+    // Applications folder
+    #[cfg(target_os = "windows")]
+    {
+        paths.push(("Applications".to_string(), PathBuf::from("C:\\Program Files")));
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        paths.push(("Applications".to_string(), PathBuf::from("/Applications")));
     }
 
-    let home_path = Path::new(&home);
-    let candidates = vec![
-        ("Home", home.clone()),
-        ("Documents", home_path.join("Documents").to_string_lossy().to_string()),
-        ("Downloads", home_path.join("Downloads").to_string_lossy().to_string()),
-        ("Desktop", home_path.join("Desktop").to_string_lossy().to_string()),
-        ("Pictures", home_path.join("Pictures").to_string_lossy().to_string()),
-        ("Videos", home_path.join("Videos").to_string_lossy().to_string()),
-        ("Music", home_path.join("Music").to_string_lossy().to_string()),
-    ];
+    // Standard profile folders
+    if let Ok(p) = app.path().document_dir() { paths.push(("Documents".to_string(), p)); }
+    if let Ok(p) = app.path().download_dir() { paths.push(("Downloads".to_string(), p)); }
+    if let Ok(p) = app.path().desktop_dir() { paths.push(("Desktop".to_string(), p)); }
+    if let Ok(p) = app.path().picture_dir() { paths.push(("Pictures".to_string(), p)); }
+    if let Ok(p) = app.path().video_dir() { paths.push(("Movies".to_string(), p)); }
+    if let Ok(p) = app.path().audio_dir() { paths.push(("Music".to_string(), p)); }
 
-    let mut folders = Vec::new();
-    for (name, path_str) in candidates {
-        let p = Path::new(&path_str);
-        if p.exists() && p.is_dir() {
-            folders.push(UserFolder {
-                name: name.to_string(),
-                path: path_str,
+    let valid_folders: Vec<(String, PathBuf)> = paths
+        .into_iter()
+        .filter(|(_, p)| p.exists() && p.is_dir())
+        .collect();
+
+    let folders: Vec<UserFolder> = valid_folders
+        .into_par_iter()
+        .map(|(name, path_buf)| {
+            let size = get_dir_size_parallel(&path_buf);
+            UserFolder {
+                name,
+                path: path_buf.to_string_lossy().to_string(),
                 exists: true,
-            });
-        }
-    }
+                size,
+            }
+        })
+        .collect();
 
     folders
+}
+
+pub fn get_dir_size_parallel(path: &Path) -> u64 {
+    if !path.exists() || !path.is_dir() {
+        return 0;
+    }
+
+    if let Ok(entries) = fs::read_dir(path) {
+        entries
+            .into_iter()
+            .filter_map(Result::ok)
+            .par_bridge()
+            .map(|entry| {
+                let p = entry.path();
+                if p.is_dir() {
+                    get_dir_size_parallel(&p)
+                } else if let Ok(meta) = entry.metadata() {
+                    meta.len()
+                } else {
+                    0
+                }
+            })
+            .sum()
+    } else {
+        0
+    }
+}
+
+fn get_disk_smart_status(mount_point: &str) -> String {
+    #[cfg(target_os = "macos")]
+    {
+        if mount_point.is_empty() {
+            return "Unknown".to_string();
+        }
+        let output = std::process::Command::new("diskutil")
+            .args(["info", mount_point])
+            .output();
+
+        if let Ok(out) = output {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            for line in stdout.lines() {
+                if line.contains("SMART Status:") {
+                    let parts: Vec<&str> = line.split(':').collect();
+                    if parts.len() > 1 {
+                        return parts[1].trim().to_string();
+                    }
+                }
+            }
+        }
+        "Unknown".to_string()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let output = std::process::Command::new("powershell")
+            .args(["-Command", "Get-WmiObject -Namespace root\\wmi -Class MSStorageDriver_FailurePredictStatus | Select-Object -ExpandProperty PredictFailure"])
+            .output();
+        if let Ok(out) = output {
+            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
+            if stdout == "false" {
+                return "Verified".to_string();
+            } else if stdout == "true" {
+                return "Failing".to_string();
+            }
+        }
+        "Unknown".to_string()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        "Unknown".to_string()
+    }
 }

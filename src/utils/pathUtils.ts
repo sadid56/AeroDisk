@@ -8,7 +8,7 @@ export function getFullPath(nodeId: number, flatNodes: FileNode[]): string {
   let curr: FileNode | null = node;
 
   while (curr) {
-    if (curr.parentId === null) {
+    if (curr.parentId == null) {
       // Root node holds the base absolute path
       trail.unshift(curr.path || "");
       break;

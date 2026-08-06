@@ -2,7 +2,7 @@ export interface FileNode {
   id: number;
   name: string;
   path: string;
-  isDirectory: boolean;
+  isDirectory?: boolean;
   size: number;
   childIds: number[];
   parentId: number | null;
@@ -30,12 +30,15 @@ export interface SystemDrive {
   available_space: number;
   file_system: string;
   is_removable: boolean;
+  is_read_only: boolean;
+  smart_status: string;
 }
 
 export interface UserFolder {
   name: string;
   path: string;
   exists: boolean;
+  size?: number;
 }
 
 export interface DirectoryEntry {
@@ -76,4 +79,26 @@ export interface ToastMessage {
   title: string;
   message: string;
   type?: 'success' | 'error' | 'info';
+}
+
+export interface LargeFile {
+  name: string;
+  path: string;
+  size: number;
+  file_type: string;
+}
+
+export interface CleanupSuggestion {
+  id: string;
+  title: string;
+  desc: string;
+  size: number;
+}
+
+export interface DuplicateGroup {
+  name: string;
+  size: number;
+  count: number;
+  total_waste: number;
+  paths: string[];
 }
