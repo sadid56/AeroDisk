@@ -222,7 +222,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ drives, folders, o
                   <div className='mt-2.5 space-y-0.5'>
                     <h4 className='text-xs font-bold text-slate-100 truncate'>{folder.name}</h4>
                     <p className='text-[9px] text-slate-500 font-mono truncate font-semibold'>
-                      {folder.size ? formatBytes(folder.size) : "Calculating..."}
+                      {folder.size !== undefined && folder.size !== null ? formatBytes(folder.size) : "Access Required"}
                     </p>
                   </div>
                 </Card>

@@ -57,14 +57,23 @@ export function useAutoUpdater() {
       }
     } catch (err: any) {
       console.error("Update check failed:", err);
-      setError(err?.toString() || "Failed to check for updates");
+      const errMsg = err?.toString() || "Failed to check for updates";
+      setError(errMsg);
       setChecking(false);
       if (isManual) {
-        showToast({
-          message: "Update Check Failed",
-          description: err?.toString() || "Please check your internet connection and try again.",
-          type: "error",
-        });
+        if (errMsg.includes("Could not fetch a valid release JSON") || errMsg.includes("404") || errMsg.includes("not found")) {
+          showToast({
+            message: "App is Up to Date",
+            description: "No new updates are currently available on the update server.",
+            type: "success",
+          });
+        } else {
+          showToast({
+            message: "Update Check Failed",
+            description: errMsg || "Please check your internet connection and try again.",
+            type: "error",
+          });
+        }
       }
       return false;
     }

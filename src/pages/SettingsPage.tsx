@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getVersion } from '@tauri-apps/api/app';
-import { Settings, Type, Palette, Check, Sun, Moon, Laptop } from "lucide-react";
+import { Settings, Type, Palette, Check, Sun, Moon, Laptop, ShieldAlert } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { PageHeader } from "../components/common/PageHeader";
 import { Container } from "../components/common/Container";
+import { useFullDiskAccess } from "../hooks/useFullDiskAccess";
+import { showToast } from "../providers/ToastProvider";
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 
@@ -85,6 +87,40 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [systemFonts, setSystemFonts] = useState<string[]>(DEFAULT_FONTS);
   const [appVersion, setAppVersion] = useState<string>("2.0.0");
+  const { hasFDA, checkFDA, requestFDA } = useFullDiskAccess();
+  const [fdaDismissed, setFdaDismissed] = useState<boolean>(false);
+  const isMac = navigator.userAgent.toLowerCase().includes("mac");
+
+  useEffect(() => {
+    setFdaDismissed(localStorage.getItem("hyperdisk_fda_dismissed") === "true");
+  }, []);
+
+  const handleResetFdaPrompt = useCallback(() => {
+    localStorage.removeItem("hyperdisk_fda_dismissed");
+    setFdaDismissed(false);
+    showToast({
+      message: "Prompt Reset",
+      description: "You will be prompted for Full Disk Access again on next startup if it remains disabled.",
+      type: "success",
+    });
+  }, []);
+
+  const handleCheckStatus = useCallback(async () => {
+    const allowed = await checkFDA();
+    if (allowed) {
+      showToast({
+        message: "Access Granted",
+        description: "Full Disk Access is successfully enabled. HyperDisk can scan all files at maximum speed.",
+        type: "success",
+      });
+    } else {
+      showToast({
+        message: "Status Checked",
+        description: "Full Disk Access is not yet enabled. Please enable it in macOS System Settings.",
+        type: "warning",
+      });
+    }
+  }, [checkFDA]);
 
   useEffect(() => {
     const fetchVersion = async () => {
@@ -250,6 +286,61 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
             })}
           </div>
         </Card>
+
+        {isMac && (
+          <Card className='space-y-4'>
+            <div className='flex items-center justify-between'>
+              <div className='flex items-center gap-2.5'>
+                <ShieldAlert className='w-5 h-5' />
+                <h2 className='text-sm font-bold'>System Permissions (macOS)</h2>
+              </div>
+            </div>
+
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-4 pt-2'>
+              {/* Status Section */}
+              <div className='p-4 bg-background/50 border border-surface-border rounded-xl flex flex-col justify-between gap-4'>
+                <div>
+                  <h3 className='font-bold text-xs text-text-primary'>Full Disk Access Status</h3>
+                  <div className='flex items-center gap-2 mt-2'>
+                    <span className={`w-2 h-2 rounded-full ${hasFDA ? "bg-emerald-500" : "bg-amber-500"}`} />
+                    <span className='text-[11px] font-bold uppercase tracking-wider'>{hasFDA ? "Access Granted" : "Access Required"}</span>
+                  </div>
+                  <p className='text-[10px] text-text-muted mt-2 leading-relaxed'>
+                    Full Disk Access enables fast, complete scans of all folders on your drive without permissions warnings.
+                  </p>
+                </div>
+                <div className='flex gap-2.5'>
+                  {!hasFDA && (
+                    <Button variant='primary' onClick={requestFDA} className='text-xs'>
+                      Grant Access
+                    </Button>
+                  )}
+                  <Button variant='outline' onClick={handleCheckStatus} className='text-xs'>
+                    Check Status
+                  </Button>
+                </div>
+              </div>
+
+              {/* Prompt Config Section */}
+              <div className='p-4 bg-background/50 border border-surface-border rounded-xl flex flex-col justify-between gap-4'>
+                <div>
+                  <h3 className='font-bold text-xs text-text-primary'>Startup Prompt Settings</h3>
+                  <p className='text-[10px] text-text-muted mt-2 leading-relaxed'>
+                    Manage whether HyperDisk prompts you on launch if Full Disk Access is not granted.
+                  </p>
+                  <div className='mt-3 text-[10px] font-semibold text-slate-400'>
+                    Status: {fdaDismissed ? "Dismissed (Will not prompt on startup)" : "Active (Will prompt if access is missing)"}
+                  </div>
+                </div>
+                <div>
+                  <Button variant='outline' disabled={!fdaDismissed} onClick={handleResetFdaPrompt} className='w-full sm:w-auto text-xs'>
+                    Reset Startup Prompt
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
 
         <Card className='space-y-4'>
           <div className='flex items-center justify-between'>

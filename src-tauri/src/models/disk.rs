@@ -23,7 +23,7 @@ pub struct UserFolder {
     pub name: String,
     pub path: String,
     pub exists: bool,
-    pub size: u64,
+    pub size: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

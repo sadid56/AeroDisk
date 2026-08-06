@@ -50,9 +50,14 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
                 <div className='min-w-0 flex-1 space-y-0.5'>
                   <div className='flex items-center justify-between gap-2'>
                     <h4 className='text-sm font-bold text-slate-100 truncate'>{folder.name}</h4>
-                    {folder.size !== undefined && (
+                    {folder.size !== undefined && folder.size !== null && (
                       <span className='text-[10px] font-bold text-slate-350 font-mono bg-slate-900/60 border border-surface-border px-1.5 py-0.5 rounded shrink-0'>
                         {formatBytes(folder.size)}
+                      </span>
+                    )}
+                    {(folder.size === undefined || folder.size === null) && (
+                      <span className='text-[10px] font-bold text-amber-500/80 font-mono bg-amber-500/5 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0'>
+                        Access Required
                       </span>
                     )}
                   </div>

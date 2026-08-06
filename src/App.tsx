@@ -17,6 +17,7 @@ import { FileNode } from "./types";
 import { getFullPath } from "./utils/pathUtils";
 import { useToolsData } from "./hooks/useToolsData";
 import { useProtectedPath } from "./hooks/useProtectedPath";
+import { useFullDiskAccess } from "./hooks/useFullDiskAccess";
 import { LeftSidebar } from "./layout/LeftSidebar";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { Header } from "./layout/Header";
@@ -51,6 +52,35 @@ export const App: React.FC = () => {
   const { refreshDiskInfo } = useDiskInfo(rootPath);
   const { drives, folders, refetch: refetchDrives } = useSystemDrives();
   const { largeFiles, cleanupSuggestions, duplicateGroups, loading: toolsLoading, refetchTools } = useToolsData();
+  const { checkFDA, requestFDA } = useFullDiskAccess();
+  const [showFdaModal, setShowFdaModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    const isMac = navigator.userAgent.toLowerCase().includes("mac");
+    if (!isMac) return;
+
+    const checkStartupFDA = async () => {
+      const fdaGranted = await checkFDA();
+      if (!fdaGranted) {
+        const dismissed = localStorage.getItem("hyperdisk_fda_dismissed") === "true";
+        if (!dismissed) {
+          setShowFdaModal(true);
+        }
+      }
+    };
+    checkStartupFDA();
+  }, [checkFDA]);
+
+  const handleGrantFDA = useCallback(async () => {
+    await requestFDA();
+    localStorage.setItem("hyperdisk_fda_dismissed", "true");
+    setShowFdaModal(false);
+  }, [requestFDA]);
+
+  const handleSkipFDA = useCallback(() => {
+    localStorage.setItem("hyperdisk_fda_dismissed", "true");
+    setShowFdaModal(false);
+  }, []);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
   const [pendingDeleteNode, setPendingDeleteNode] = useState<FileNode | null>(null);
@@ -338,6 +368,33 @@ export const App: React.FC = () => {
         onConfirm={updater.startUpdate}
         onSkip={updater.skipUpdate}
       />
+
+      {showFdaModal && (
+        <AlertModal
+          isOpen={showFdaModal}
+          title="Full Disk Access Recommended"
+          subtitle="macOS Security & Privacy"
+          icon={<ShieldAlert className='w-5 h-5 text-amber-500' />}
+          variant='warning'
+          confirmLabel='Grant Access'
+          cancelLabel='Skip'
+          onConfirm={handleGrantFDA}
+          onCancel={handleSkipFDA}
+          message={
+            <div className='space-y-3 text-xs text-slate-350 leading-relaxed text-left'>
+              <p>
+                HyperDisk needs <strong>Full Disk Access</strong> permission to scan your drives and analyze storage usage.
+              </p>
+              <p>
+                Without this permission, macOS will prompt you with multiple file access popups, and the application will run significantly slower (up to 5x slower) and cannot analyze system areas.
+              </p>
+              <p>
+                To grant access, click <strong>Grant Access</strong>, toggle HyperDisk to ON in macOS System Settings under Privacy & Security, and restart the app. You can configure this later in Settings.
+              </p>
+            </div>
+          }
+        />
+      )}
 
       <ToastProvider />
     </div>

@@ -7,22 +7,7 @@ pub fn check_is_protected_path(target_path: String) -> bool {
 
 #[tauri::command]
 pub fn check_full_disk_access() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        if let Ok(home) = std::env::var("HOME") {
-            let path = std::path::Path::new(&home).join("Library/Mail");
-            match std::fs::read_dir(path) {
-                Ok(_) => true,
-                Err(err) => err.kind() != std::io::ErrorKind::PermissionDenied,
-            }
-        } else {
-            false
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        true
-    }
+    crate::services::has_full_disk_access()
 }
 
 #[tauri::command]

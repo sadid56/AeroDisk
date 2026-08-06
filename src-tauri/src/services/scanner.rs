@@ -241,6 +241,7 @@ impl Scanner {
 // ─── Phase 1: Parallel Walk ─────────────────────────────────────────────────
 
 impl Scanner {
+    #[allow(unused_variables)]
     fn should_skip_directory(dir: &Path, entry_name: &std::ffi::OsStr) -> bool {
         #[cfg(not(target_os = "windows"))]
         {
@@ -258,6 +259,32 @@ impl Scanner {
         false
     }
 
+    fn is_protected_tcc_path(path: &Path, home: &Option<PathBuf>) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            if let Some(home_path) = home {
+                let relative_path = path.strip_prefix(home_path).ok();
+                if let Some(rel) = relative_path {
+                    let rel_str = rel.to_string_lossy();
+                    if rel_str == "Desktop"
+                        || rel_str == "Documents"
+                        || rel_str == "Downloads"
+                        || rel_str == "Pictures"
+                        || rel_str == "Movies"
+                        || rel_str == "Music"
+                        || rel_str.starts_with("Library/Mail")
+                        || rel_str.starts_with("Library/Messages")
+                        || rel_str.starts_with("Library/Safari")
+                        || rel_str.starts_with("Library/HomeKit")
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     fn walk_parallel(
         dir: &Path,
         created_at: Option<u64>,
@@ -268,6 +295,33 @@ impl Scanner {
         scan_id: Option<&str>,
         target_path: &Path,
     ) -> RawDir {
+        let home = std::env::var("HOME").ok().map(PathBuf::from);
+        let has_fda = crate::services::disk::has_full_disk_access();
+
+        let should_bypass = if cfg!(target_os = "macos") && !has_fda {
+            if dir != target_path {
+                Self::is_protected_tcc_path(dir, &home)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if should_bypass {
+            let name = dir
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| dir.to_string_lossy().into_owned());
+            return RawDir {
+                name,
+                path: dir.to_path_buf(),
+                size: 0,
+                created_at,
+                files: Vec::new(),
+                subdirs: Vec::new(),
+            };
+        }
         let mut file_entries = Vec::new();
         let mut dir_entries = Vec::new();
 

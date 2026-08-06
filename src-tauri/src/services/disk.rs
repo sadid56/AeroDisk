@@ -369,6 +369,25 @@ pub fn list_directory_entries(target_path: &str) -> Result<Vec<DirectoryEntry>, 
     Ok(entries)
 }
 
+pub fn has_full_disk_access() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            let path = std::path::Path::new(&home).join("Library/Mail");
+            match std::fs::read_dir(path) {
+                Ok(_) => true,
+                Err(err) => err.kind() != std::io::ErrorKind::PermissionDenied,
+            }
+        } else {
+            false
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
 pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
     let mut paths = Vec::new();
     
@@ -395,10 +414,17 @@ pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
         .filter(|(_, p)| p.exists() && p.is_dir())
         .collect();
 
+    let has_fda = has_full_disk_access();
+
     let folders: Vec<UserFolder> = valid_folders
         .into_par_iter()
         .map(|(name, path_buf)| {
-            let size = get_dir_size_parallel(&path_buf);
+            let is_protected = name != "Applications";
+            let size = if !is_protected || has_fda {
+                Some(get_dir_size_parallel(&path_buf))
+            } else {
+                None
+            };
             UserFolder {
                 name,
                 path: path_buf.to_string_lossy().to_string(),
@@ -437,6 +463,7 @@ pub fn get_dir_size_parallel(path: &Path) -> u64 {
     }
 }
 
+#[allow(unused_variables)]
 fn get_disk_smart_status(mount_point: &str) -> String {
     #[cfg(target_os = "macos")]
     {

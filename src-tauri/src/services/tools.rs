@@ -7,16 +7,20 @@ use tauri::Manager;
 
 pub fn get_large_files(app: &tauri::AppHandle) -> Vec<LargeFile> {
     let mut raw_files = Vec::new();
-    let targets = vec![
-        app.path().download_dir(),
-        app.path().document_dir(),
-        app.path().desktop_dir(),
-    ];
+    let has_fda = crate::services::disk::has_full_disk_access();
 
-    for target_res in targets {
-        if let Ok(path) = target_res {
-            if path.exists() && path.is_dir() {
-                collect_files_in_dir(&path, &mut raw_files);
+    if !cfg!(target_os = "macos") || has_fda {
+        let targets = vec![
+            app.path().download_dir(),
+            app.path().document_dir(),
+            app.path().desktop_dir(),
+        ];
+
+        for target_res in targets {
+            if let Ok(path) = target_res {
+                if path.exists() && path.is_dir() {
+                    collect_files_in_dir(&path, &mut raw_files);
+                }
             }
         }
     }
@@ -50,6 +54,7 @@ pub fn get_large_files(app: &tauri::AppHandle) -> Vec<LargeFile> {
 
 pub fn get_cleanup_suggestions(app: &tauri::AppHandle) -> Vec<CleanupSuggestion> {
     let mut suggestions = Vec::new();
+    let has_fda = crate::services::disk::has_full_disk_access();
 
     // 1. Trash Bin
     let trash_path = if cfg!(target_os = "windows") {
@@ -57,7 +62,11 @@ pub fn get_cleanup_suggestions(app: &tauri::AppHandle) -> Vec<CleanupSuggestion>
     } else {
         app.path().home_dir().unwrap_or_default().join(".Trash")
     };
-    let trash_size = get_dir_size_parallel(&trash_path);
+    let trash_size = if !cfg!(target_os = "macos") || has_fda {
+        get_dir_size_parallel(&trash_path)
+    } else {
+        0
+    };
     suggestions.push(CleanupSuggestion {
         id: "trash".to_string(),
         title: "Trash Bin".to_string(),
@@ -71,7 +80,11 @@ pub fn get_cleanup_suggestions(app: &tauri::AppHandle) -> Vec<CleanupSuggestion>
     } else {
         app.path().home_dir().unwrap_or_default().join("Library/Caches")
     };
-    let cache_size = get_dir_size_parallel(&cache_path);
+    let cache_size = if !cfg!(target_os = "macos") || has_fda {
+        get_dir_size_parallel(&cache_path)
+    } else {
+        0
+    };
     suggestions.push(CleanupSuggestion {
         id: "caches".to_string(),
         title: "System Caches & Logs".to_string(),
@@ -81,7 +94,11 @@ pub fn get_cleanup_suggestions(app: &tauri::AppHandle) -> Vec<CleanupSuggestion>
 
     // 3. Downloads Folder
     let downloads_path = app.path().download_dir().unwrap_or_default();
-    let downloads_size = get_dir_size_parallel(&downloads_path);
+    let downloads_size = if !cfg!(target_os = "macos") || has_fda {
+        get_dir_size_parallel(&downloads_path)
+    } else {
+        0
+    };
     suggestions.push(CleanupSuggestion {
         id: "downloads".to_string(),
         title: "Downloads Folder".to_string(),
@@ -105,9 +122,12 @@ pub fn get_cleanup_suggestions(app: &tauri::AppHandle) -> Vec<CleanupSuggestion>
     if pnpm_cache.exists() {
         dev_cache_size += get_dir_size_parallel(&pnpm_cache);
     }
-    let xcode_derived = home.join("Library/Developer/Xcode/DerivedData");
-    if xcode_derived.exists() {
-        dev_cache_size += get_dir_size_parallel(&xcode_derived);
+    
+    if !cfg!(target_os = "macos") || has_fda {
+        let xcode_derived = home.join("Library/Developer/Xcode/DerivedData");
+        if xcode_derived.exists() {
+            dev_cache_size += get_dir_size_parallel(&xcode_derived);
+        }
     }
 
     suggestions.push(CleanupSuggestion {
@@ -122,16 +142,20 @@ pub fn get_cleanup_suggestions(app: &tauri::AppHandle) -> Vec<CleanupSuggestion>
 
 pub fn get_duplicate_files(app: &tauri::AppHandle) -> Vec<DuplicateGroup> {
     let mut raw_files = Vec::new();
-    let targets = vec![
-        app.path().download_dir(),
-        app.path().document_dir(),
-        app.path().desktop_dir(),
-    ];
+    let has_fda = crate::services::disk::has_full_disk_access();
 
-    for target_res in targets {
-        if let Ok(path) = target_res {
-            if path.exists() && path.is_dir() {
-                collect_files_in_dir(&path, &mut raw_files);
+    if !cfg!(target_os = "macos") || has_fda {
+        let targets = vec![
+            app.path().download_dir(),
+            app.path().document_dir(),
+            app.path().desktop_dir(),
+        ];
+
+        for target_res in targets {
+            if let Ok(path) = target_res {
+                if path.exists() && path.is_dir() {
+                    collect_files_in_dir(&path, &mut raw_files);
+                }
             }
         }
     }
@@ -352,13 +376,16 @@ pub fn search_system_directory(app: &tauri::AppHandle, query: &str) -> Vec<Direc
     }
 
     let home = app.path().home_dir().unwrap_or_default();
-    let targets = vec![
-        app.path().download_dir().unwrap_or_default(),
-        app.path().document_dir().unwrap_or_default(),
-        app.path().desktop_dir().unwrap_or_default(),
-        home.join("Pictures"),
-        home.join("Movies"),
-    ];
+    let has_fda = crate::services::disk::has_full_disk_access();
+    let mut targets = Vec::new();
+
+    if !cfg!(target_os = "macos") || has_fda {
+        targets.push(app.path().download_dir().unwrap_or_default());
+        targets.push(app.path().document_dir().unwrap_or_default());
+        targets.push(app.path().desktop_dir().unwrap_or_default());
+        targets.push(home.join("Pictures"));
+        targets.push(home.join("Movies"));
+    }
 
     for root in targets {
         if root.exists() && root.is_dir() {
