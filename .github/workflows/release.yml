@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 jobs:
   publish-tauri:
@@ -36,31 +35,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: get_version
-        shell: bash
-        run: |
-          # Strip 'v' prefix from tag (v2.1.0 -> 2.1.0)
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Detected version: $VERSION"
-
-      - name: Sync version into config files
-        shell: bash
-        run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-
-          # Update package.json
-          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json && rm -f package.json.bak
-
-          # Update src-tauri/tauri.conf.json
-          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json && rm -f src-tauri/tauri.conf.json.bak
-
-          # Update src-tauri/Cargo.toml (only the package version line)
-          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
-
-          echo "✅ All config files updated to version $VERSION"
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -70,6 +44,39 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 11
+
+      - name: Sync version from git tag
+        shell: bash
+        run: |
+          # Strip 'v' prefix from tag (v2.1.0 -> 2.1.0)
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Syncing version to: $VERSION"
+
+          # Update package.json using node (cross-platform safe)
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+          # Update src-tauri/tauri.conf.json using node
+          node -e "
+            const fs = require('fs');
+            const conf = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+            conf.version = '$VERSION';
+            fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(conf, null, 2) + '\n');
+          "
+
+          # Update src-tauri/Cargo.toml (simple line replacement)
+          node -e "
+            const fs = require('fs');
+            let toml = fs.readFileSync('src-tauri/Cargo.toml', 'utf8');
+            toml = toml.replace(/^version = \".*\"/m, 'version = \"$VERSION\"');
+            fs.writeFileSync('src-tauri/Cargo.toml', toml);
+          "
+
+          echo "✅ All config files updated to version $VERSION"
 
       - name: Install Rust Toolchain & Target
         uses: dtolnay/rust-toolchain@stable
