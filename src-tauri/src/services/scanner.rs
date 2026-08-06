@@ -158,6 +158,9 @@ impl Scanner {
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs())
         });
+        let home = std::env::var("HOME").ok().map(PathBuf::from);
+        let home_canonical = home.as_ref().and_then(|h| h.canonicalize().ok());
+
         let raw_tree = Self::walk_parallel(
             root_path,
             root_created_at,
@@ -167,6 +170,8 @@ impl Scanner {
             &last_emit_ms,
             scan_id,
             root_path,
+            &home,
+            &home_canonical,
         );
 
         let file_count = progress.load(Ordering::Relaxed);
@@ -259,12 +264,11 @@ impl Scanner {
         false
     }
 
-    fn is_protected_tcc_path(path: &Path, home: &Option<PathBuf>) -> bool {
+    fn is_protected_tcc_path(path: &Path, home: &Option<PathBuf>, home_canonical: &Option<PathBuf>) -> bool {
         #[cfg(target_os = "macos")]
         {
-            if let Some(home_path) = home {
-                let relative_path = path.strip_prefix(home_path).ok();
-                if let Some(rel) = relative_path {
+            let check_strip = |base_path: &Path| -> bool {
+                if let Ok(rel) = path.strip_prefix(base_path) {
                     let rel_str = rel.to_string_lossy();
                     if rel_str == "Desktop"
                         || rel_str == "Documents"
@@ -280,6 +284,18 @@ impl Scanner {
                         return true;
                     }
                 }
+                false
+            };
+
+            if let Some(h) = home {
+                if check_strip(h) {
+                    return true;
+                }
+            }
+            if let Some(hc) = home_canonical {
+                if check_strip(hc) {
+                    return true;
+                }
             }
         }
         false
@@ -294,13 +310,14 @@ impl Scanner {
         last_emit_ms: &Arc<AtomicU64>,
         scan_id: Option<&str>,
         target_path: &Path,
+        home: &Option<PathBuf>,
+        home_canonical: &Option<PathBuf>,
     ) -> RawDir {
-        let home = std::env::var("HOME").ok().map(PathBuf::from);
         let has_fda = crate::services::disk::has_full_disk_access();
 
         let should_bypass = if cfg!(target_os = "macos") && !has_fda {
             if dir != target_path {
-                Self::is_protected_tcc_path(dir, &home)
+                Self::is_protected_tcc_path(dir, home, home_canonical)
             } else {
                 false
             }
@@ -373,6 +390,8 @@ impl Scanner {
                     last_emit_ms,
                     scan_id,
                     target_path,
+                    home,
+                    home_canonical,
                 )
             })
             .collect();

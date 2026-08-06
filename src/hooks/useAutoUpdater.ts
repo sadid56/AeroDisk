@@ -61,7 +61,13 @@ export function useAutoUpdater() {
       setError(errMsg);
       setChecking(false);
       if (isManual) {
-        if (errMsg.includes("Could not fetch a valid release JSON") || errMsg.includes("404") || errMsg.includes("not found")) {
+        const lowerMsg = errMsg.toLowerCase();
+        if (
+          lowerMsg.includes("could not fetch a valid release json") ||
+          lowerMsg.includes("404") ||
+          lowerMsg.includes("not found") ||
+          lowerMsg.includes("status code")
+        ) {
           showToast({
             message: "App is Up to Date",
             description: "No new updates are currently available on the update server.",
