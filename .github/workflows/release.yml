@@ -1,4 +1,4 @@
-name: "Publish AeroDisk Release"
+name: "Publish HyperDisk Release"
 
 on:
   push:
@@ -36,6 +36,31 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Extract version from tag
+        id: get_version
+        shell: bash
+        run: |
+          # Strip 'v' prefix from tag (v2.1.0 -> 2.1.0)
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION"
+
+      - name: Sync version into config files
+        shell: bash
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+
+          # Update package.json
+          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json && rm -f package.json.bak
+
+          # Update src-tauri/tauri.conf.json
+          sed -i.bak "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json && rm -f src-tauri/tauri.conf.json.bak
+
+          # Update src-tauri/Cargo.toml (only the package version line)
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml && rm -f src-tauri/Cargo.toml.bak
+
+          echo "✅ All config files updated to version $VERSION"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -70,8 +95,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v__VERSION__
-          releaseName: "AeroDisk v__VERSION__"
-          releaseBody: "Official AeroDisk Production Release for Linux, Windows, and macOS."
+          releaseName: "HyperDisk v__VERSION__"
+          releaseBody: "Official HyperDisk Production Release for Linux, Windows, and macOS."
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

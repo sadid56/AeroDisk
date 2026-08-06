@@ -1,7 +1,7 @@
 {
   "name": "hyperdisk",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "description": "High-performance disk usage analyzer with a polished Rust and Tauri desktop experience",
   "author": "Sadid <sadidhasan56@gmail.com>",
