@@ -2,7 +2,12 @@
 
 HyperDisk is a high-performance desktop disk usage analyzer built to help you inspect storage, identify large files and folders, and clean up disk space with confidence.
 
+### HyperDisk Home Page
 ![HyperDisk Home Screen](public/hyperdisk-home.png)
+
+---
+
+### HyperDisk Analyzer Page
 ![HyperDisk Analyzer Screen](public/hyperdisk-analyzer.png)
 
 ---
@@ -34,16 +39,6 @@ For macOS users: The one-line installer automatically removes quarantine flags t
 
 ---
 
-## How to Use It
-
-1. Open HyperDisk.
-2. Choose a folder or drive to scan.
-3. Wait for the scan progress to complete.
-4. Explore the results using the chart, file list, and breadcrumbs.
-5. Reveal items in your file manager or delete them safely.
-
----
-
 ## Run HyperDisk Locally
 
 Follow these steps to set up and run the project locally.
@@ -51,26 +46,15 @@ Follow these steps to set up and run the project locally.
 ### 1. Install Rust
 Tauri requires Rust to compile the native backend.
 
-* **macOS / Linux:**
-  Run the following in your terminal:
-  ```bash
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-  ```
-* **Windows:**
-  Download and run [rustup-init.exe](https://rustup.rs/) to install Rust.
+Run the following in your terminal:
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
 
 ---
 
 ### 2. Install System Dependencies
 
-#### macOS
-Install Xcode Command Line Tools:
-```bash
-xcode-select --install
-```
-
-#### Windows
-Download and install [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/visual-cpp-build-loop/). Make sure to select the **Desktop development with C++** workload during installation.
 
 #### Linux (Arch Linux)
 ```bash

@@ -167,7 +167,7 @@ install_linux() {
 [Desktop Entry]
 Name=${DISPLAY_NAME}
 Comment=Disk Storage Analyzer
-Exec=${BIN_DIR}/${APP_NAME}
+Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 ${BIN_DIR}/${APP_NAME}
 Icon=${ICON_DIR}/${APP_NAME}.svg
 Terminal=false
 Type=Application
