@@ -91,27 +91,54 @@ install_linux() {
     CLEAN_VERSION=$(echo "$VERSION" | sed 's/^v//')
     echo "Latest version found: ${VERSION}"
 
-    # Search for compiled tar.gz asset (e.g. HyperDisk_linux_x64.tar.gz)
+    # Search for compiled package assets (prefer .deb for native library compatibility, then .tar.gz, then .AppImage)
     DOWNLOAD_URL=""
+    IS_DEB=false
     IS_TAR_GZ=false
 
+    # Check for available helper tools
+    HAS_AR_AND_TAR=false
+    if command -v ar >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
+        HAS_AR_AND_TAR=true
+    fi
+
+    # 1. Look up assets from API response
     if echo "$LATEST_RELEASE" | grep -q '"browser_download_url"'; then
-        DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.tar\.gz" | grep -iv "source" | head -n 1 | cut -d'"' -f4)
-        if [ -n "$DOWNLOAD_URL" ]; then
-            IS_TAR_GZ=true
-        else
+        if [ "$HAS_AR_AND_TAR" = true ]; then
+            DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.deb" | head -n 1 | cut -d'"' -f4)
+            if [ -n "$DOWNLOAD_URL" ]; then
+                IS_DEB=true
+            fi
+        fi
+        if [ -z "$DOWNLOAD_URL" ]; then
+            DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.tar\.gz" | grep -iv "source" | head -n 1 | cut -d'"' -f4)
+            if [ -n "$DOWNLOAD_URL" ]; then
+                IS_TAR_GZ=true
+            fi
+        fi
+        if [ -z "$DOWNLOAD_URL" ]; then
             DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.AppImage" | head -n 1 | cut -d'"' -f4)
         fi
     fi
 
-    # Fallback to scraping the expanded assets page if API rate limited
+    # 2. Fallback to scraping the expanded assets page if API rate limited
     if [ -z "$DOWNLOAD_URL" ]; then
         ASSET_PATHS=$(curl -sL "https://github.com/${REPO}/releases/expanded_assets/${VERSION}" | grep -o "/${REPO}/releases/download/[^\"]*")
-        RELATIVE_URL=$(echo "$ASSET_PATHS" | grep -i "\.tar\.gz" | grep -iv "source" | head -n 1)
-        if [ -n "$RELATIVE_URL" ]; then
-            IS_TAR_GZ=true
-            DOWNLOAD_URL="https://github.com${RELATIVE_URL}"
-        else
+        if [ "$HAS_AR_AND_TAR" = true ]; then
+            RELATIVE_URL=$(echo "$ASSET_PATHS" | grep -i "\.deb" | head -n 1)
+            if [ -n "$RELATIVE_URL" ]; then
+                IS_DEB=true
+                DOWNLOAD_URL="https://github.com${RELATIVE_URL}"
+            fi
+        fi
+        if [ -z "$DOWNLOAD_URL" ]; then
+            RELATIVE_URL=$(echo "$ASSET_PATHS" | grep -i "\.tar\.gz" | grep -iv "source" | head -n 1)
+            if [ -n "$RELATIVE_URL" ]; then
+                IS_TAR_GZ=true
+                DOWNLOAD_URL="https://github.com${RELATIVE_URL}"
+            fi
+        fi
+        if [ -z "$DOWNLOAD_URL" ]; then
             RELATIVE_URL=$(echo "$ASSET_PATHS" | grep -i "\.AppImage" | head -n 1)
             if [ -n "$RELATIVE_URL" ]; then
                 DOWNLOAD_URL="https://github.com${RELATIVE_URL}"
@@ -120,12 +147,53 @@ install_linux() {
     fi
 
     if [ -z "$DOWNLOAD_URL" ]; then
-        echo "Error: Could not find suitable tar.gz or AppImage release asset for version ${VERSION}."
+        echo "Error: Could not find suitable release asset (.deb, .tar.gz, or .AppImage) for version ${VERSION}."
         exit 1
     fi
     ASSET_NAME=$(basename "$DOWNLOAD_URL")
 
-    if [ "$IS_TAR_GZ" = true ]; then
+    if [ "$IS_DEB" = true ]; then
+        echo "Downloading ${ASSET_NAME} (Debian package extraction)..."
+        TEMP_DIR=$(mktemp -d)
+        TEMP_FILE="$TEMP_DIR/package.deb"
+        curl -L -o "$TEMP_FILE" "$DOWNLOAD_URL"
+        if [ $? -ne 0 ] || [ ! -s "$TEMP_FILE" ]; then
+            echo "Error: Failed to download .deb package."
+            rm -rf "$TEMP_DIR"
+            exit 1
+        fi
+
+        echo "Extracting binary from .deb package..."
+        DATA_FILE=$(ar t "$TEMP_FILE" | grep '^data.tar')
+        if [ -z "$DATA_FILE" ]; then
+            echo "Error: Could not locate data archive in .deb package."
+            rm -rf "$TEMP_DIR"
+            exit 1
+        fi
+
+        TAR_OPTS="-xf"
+        if echo "$DATA_FILE" | grep -q '\.gz$'; then
+            TAR_OPTS="-xzf"
+        elif echo "$DATA_FILE" | grep -q '\.xz$'; then
+            TAR_OPTS="-xJf"
+        elif echo "$DATA_FILE" | grep -q '\.zst$'; then
+            TAR_OPTS="--zstd -xf"
+        fi
+
+        mkdir -p "$TEMP_DIR/extracted"
+        ar p "$TEMP_FILE" "$DATA_FILE" | tar $TAR_OPTS - -C "$TEMP_DIR/extracted"
+        if [ $? -ne 0 ] || [ ! -f "$TEMP_DIR/extracted/usr/bin/hyperdisk" ]; then
+            echo "Error: Failed to extract binary from .deb package."
+            rm -rf "$TEMP_DIR"
+            exit 1
+        fi
+
+        mv "$TEMP_DIR/extracted/usr/bin/hyperdisk" "$BIN_DIR/$APP_NAME"
+        chmod +x "$BIN_DIR/$APP_NAME"
+        rm -rf "$TEMP_DIR"
+        echo "Installed native binary to $BIN_DIR/$APP_NAME"
+
+    elif [ "$IS_TAR_GZ" = true ]; then
         echo "Downloading ${ASSET_NAME}..."
         TEMP_DIR=$(mktemp -d)
         TEMP_FILE="$TEMP_DIR/archive.tar.gz"
@@ -157,6 +225,7 @@ install_linux() {
         chmod +x "$BIN_DIR/$APP_NAME"
         rm -rf "$TEMP_DIR"
         echo "Installed binary to $BIN_DIR/$APP_NAME"
+
     else
         echo "Downloading ${ASSET_NAME} (AppImage fallback)..."
         TEMP_FILE=$(mktemp)
