@@ -389,34 +389,69 @@ pub fn has_full_disk_access() -> bool {
 }
 
 pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
-    let mut paths = Vec::new();
+    let mut standard_paths = Vec::new();
     
     // Applications folder
     #[cfg(target_os = "windows")]
     {
-        paths.push(("Applications".to_string(), PathBuf::from("C:\\Program Files")));
+        standard_paths.push(("Applications".to_string(), PathBuf::from("C:\\Program Files")));
     }
     #[cfg(not(target_os = "windows"))]
     {
-        paths.push(("Applications".to_string(), PathBuf::from("/Applications")));
+        standard_paths.push(("Applications".to_string(), PathBuf::from("/Applications")));
     }
 
     // Standard profile folders
-    if let Ok(p) = app.path().document_dir() { paths.push(("Documents".to_string(), p)); }
-    if let Ok(p) = app.path().download_dir() { paths.push(("Downloads".to_string(), p)); }
-    if let Ok(p) = app.path().desktop_dir() { paths.push(("Desktop".to_string(), p)); }
-    if let Ok(p) = app.path().picture_dir() { paths.push(("Pictures".to_string(), p)); }
-    if let Ok(p) = app.path().video_dir() { paths.push(("Movies".to_string(), p)); }
-    if let Ok(p) = app.path().audio_dir() { paths.push(("Music".to_string(), p)); }
+    if let Ok(p) = app.path().document_dir() { standard_paths.push(("Documents".to_string(), p)); }
+    if let Ok(p) = app.path().download_dir() { standard_paths.push(("Downloads".to_string(), p)); }
+    if let Ok(p) = app.path().desktop_dir() { standard_paths.push(("Desktop".to_string(), p)); }
+    if let Ok(p) = app.path().picture_dir() { standard_paths.push(("Pictures".to_string(), p)); }
+    if let Ok(p) = app.path().video_dir() { standard_paths.push(("Movies".to_string(), p)); }
+    if let Ok(p) = app.path().audio_dir() { standard_paths.push(("Music".to_string(), p)); }
 
-    let valid_folders: Vec<(String, PathBuf)> = paths
-        .into_iter()
-        .filter(|(_, p)| p.exists() && p.is_dir())
-        .collect();
+    let mut all_paths = Vec::new();
+    // Add standard ones that exist
+    for (name, path) in standard_paths.clone() {
+        if path.exists() && path.is_dir() {
+            all_paths.push((name, path));
+        }
+    }
+
+    // Scan home directory for all other non-hidden directories
+    let home_res = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map(PathBuf::from);
+
+    if let Ok(home_path) = home_res {
+        if let Ok(entries) = fs::read_dir(&home_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(name_str) = path.file_name().and_then(|n| n.to_str()) {
+                        // Skip hidden directories (starting with '.')
+                        if name_str.starts_with('.') {
+                            continue;
+                        }
+                        // Skip if it's already in the standard paths
+                        let is_standard = standard_paths.iter().any(|(_, sp)| {
+                            if let (Ok(p1), Ok(p2)) = (path.canonicalize(), sp.canonicalize()) {
+                                p1 == p2
+                            } else {
+                                false
+                            }
+                        });
+                        if !is_standard {
+                            all_paths.push((name_str.to_string(), path));
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let has_fda = has_full_disk_access();
 
-    let folders: Vec<UserFolder> = valid_folders
+    let folders: Vec<UserFolder> = all_paths
         .into_par_iter()
         .map(|(name, path_buf)| {
             let is_protected = name != "Applications";
@@ -448,11 +483,18 @@ pub fn get_dir_size_parallel(path: &Path) -> u64 {
             .filter_map(Result::ok)
             .par_bridge()
             .map(|entry| {
-                let p = entry.path();
-                if p.is_dir() {
-                    get_dir_size_parallel(&p)
-                } else if let Ok(meta) = entry.metadata() {
-                    meta.len()
+                if let Ok(ft) = entry.file_type() {
+                    if ft.is_symlink() {
+                        return 0;
+                    }
+                    let p = entry.path();
+                    if ft.is_dir() {
+                        get_dir_size_parallel(&p)
+                    } else if let Ok(meta) = entry.metadata() {
+                        meta.len()
+                    } else {
+                        0
+                    }
                 } else {
                     0
                 }

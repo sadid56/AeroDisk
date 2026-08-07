@@ -35,11 +35,13 @@ interface AppRoutesProps {
   updater: any;
   drives: SystemDrive[];
   folders: UserFolder[];
+  drivesLoading: boolean;
   largeFiles: LargeFile[];
   cleanupSuggestions: CleanupSuggestion[];
   duplicateGroups: DuplicateGroup[];
   toolsLoading: boolean;
   onRefreshTools: () => void;
+  onBackToOrigin: () => void;
 }
 
 export const AppRoutes: React.FC<AppRoutesProps> = ({
@@ -60,9 +62,11 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   onContextMenu,
   onScanPath,
   onSelectFolder,
+  onBackToOrigin,
   updater,
   drives,
   folders,
+  drivesLoading,
   largeFiles,
   cleanupSuggestions,
   duplicateGroups,
@@ -79,6 +83,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           <DashboardPage
             drives={drives}
             folders={folders}
+            isLoading={drivesLoading}
             onScanPath={onScanPath}
             onNavigateTab={(tab) => navigate(`/${tab === "overview" ? "" : tab}`)}
           />
@@ -103,6 +108,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
               onSelectNode={onSelectNode}
               onNavigate={onNavigate}
               onContextMenu={onContextMenu}
+              onBackToOrigin={onBackToOrigin}
             />
           ) : (
             <div className='flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6 max-w-sm mx-auto my-auto animate-in fade-in duration-200'>

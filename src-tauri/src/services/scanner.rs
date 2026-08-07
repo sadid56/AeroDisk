@@ -4,9 +4,7 @@ use crate::models::{
 use rayon::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use tauri::{AppHandle, Emitter};
 
 #[cfg(unix)]
@@ -22,23 +20,6 @@ fn get_file_physical_size(meta: &fs::Metadata) -> u64 {
     {
         meta.len()
     }
-}
-
-// ─── Intermediate tree ────────────────────────────────────────────────────────
-
-struct RawFile {
-    name: String,
-    size: u64,
-    created_at: Option<u64>,
-}
-
-struct RawDir {
-    name: String,
-    path: PathBuf,
-    size: u64,
-    created_at: Option<u64>,
-    files: Vec<RawFile>,
-    subdirs: Vec<RawDir>,
 }
 
 // ─── Shared scan cache for on-demand path resolution ────────────────────────
@@ -123,6 +104,33 @@ impl ScanCache {
         let mut cache = self.nodes.lock().unwrap();
         *cache = nodes;
     }
+
+    pub fn append_nodes(&self, parent_id: usize, new_nodes: Vec<FileNode>) {
+        let mut cache = self.nodes.lock().unwrap();
+        
+        // Update parent's child_ids in the cache
+        if parent_id < cache.len() {
+            let child_ids: Vec<usize> = new_nodes.iter().map(|n| n.id).collect();
+            cache[parent_id].child_ids = child_ids;
+        }
+
+        for node in new_nodes {
+            let id = node.id;
+            if id >= cache.len() {
+                cache.resize(id + 1, FileNode {
+                    id: 0,
+                    name: String::new(),
+                    path: String::new(),
+                    is_directory: false,
+                    size: 0,
+                    child_ids: Vec::new(),
+                    parent_id: None,
+                    created_at: None,
+                });
+            }
+            cache[id] = node;
+        }
+    }
 }
 
 // ─── Scanner ────────────────────────────────────────────────────────────────
@@ -146,10 +154,6 @@ impl Scanner {
             return Err(format!("Target path does not exist: {}", target_path));
         }
 
-        let total_start = Instant::now();
-        let progress = Arc::new(AtomicUsize::new(0));
-        let last_emit_ms = Arc::new(AtomicU64::new(0));
-        let app_clone = app.cloned();
 
         let root_created_at = fs::metadata(root_path).ok().and_then(|m| {
             m.created()
@@ -158,26 +162,132 @@ impl Scanner {
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs())
         });
-        let home = std::env::var("HOME").ok().map(PathBuf::from);
-        let home_canonical = home.as_ref().and_then(|h| h.canonicalize().ok());
+        
+        let root_name = root_path
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| target_path.to_string());
 
-        let raw_tree = Self::walk_parallel(
-            root_path,
-            root_created_at,
-            &progress,
-            app_clone.as_ref(),
-            total_start,
-            &last_emit_ms,
-            scan_id,
-            root_path,
-            &home,
-            &home_canonical,
-        );
+        // Read direct children of target_path
+        let mut file_entries = Vec::new();
+        let mut dir_entries = Vec::new();
 
-        let file_count = progress.load(Ordering::Relaxed);
-        let capacity = file_count + file_count / 4 + 1024;
-        let mut nodes = Vec::with_capacity(capacity);
-        Self::flatten_tree(&raw_tree, None, &mut nodes);
+        if let Ok(read_dir) = fs::read_dir(root_path) {
+            for entry in read_dir.flatten() {
+                if let Ok(ft) = entry.file_type() {
+                    if ft.is_symlink() {
+                        continue;
+                    }
+                    if ft.is_dir() {
+                        let name = entry.file_name();
+                        if !Self::should_skip_directory(root_path, &name) {
+                            dir_entries.push(entry);
+                        }
+                    } else if ft.is_file() {
+                        file_entries.push(entry);
+                    }
+                }
+            }
+        }
+
+        let has_fda = crate::services::disk::has_full_disk_access();
+
+        // Process child subdirectories in parallel using Rayon
+        let dirs: Vec<(String, PathBuf, u64)> = dir_entries
+            .into_par_iter()
+            .map(|entry| {
+                let entry_path = entry.path();
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let size = if has_fda {
+                    crate::services::get_dir_size_parallel(&entry_path)
+                } else {
+                    0
+                };
+                (name, entry_path, size)
+            })
+            .collect();
+
+        // Process child files
+        let files: Vec<(String, u64)> = file_entries
+            .into_iter()
+            .map(|entry| {
+                let meta = entry.metadata().ok();
+                let size = meta.as_ref().map(get_file_physical_size).unwrap_or(0);
+                let name = entry.file_name().to_string_lossy().into_owned();
+                (name, size)
+            })
+            .collect();
+
+        let root_size: u64 = dirs.iter().map(|d| d.2).sum::<u64>() + files.iter().map(|f| f.1).sum::<u64>();
+
+        let mut nodes = Vec::new();
+        // Push root node
+        nodes.push(FileNode {
+            id: 0,
+            name: root_name,
+            path: target_path.to_string(),
+            is_directory: true,
+            size: root_size,
+            child_ids: Vec::new(),
+            parent_id: None,
+            created_at: root_created_at,
+        });
+
+        let mut child_ids = Vec::new();
+
+        // Sort directories by size descending
+        let mut sorted_dirs = dirs;
+        sorted_dirs.sort_unstable_by(|a, b| b.2.cmp(&a.2));
+
+        for (name, _path_buf, size) in sorted_dirs {
+            let child_id = nodes.len();
+            child_ids.push(child_id);
+            nodes.push(FileNode {
+                id: child_id,
+                name,
+                path: String::new(),
+                is_directory: true,
+                size,
+                child_ids: Vec::new(),
+                parent_id: Some(0),
+                created_at: None,
+            });
+        }
+
+        // Sort files by size descending
+        let mut sorted_files = files;
+        sorted_files.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+
+        for (name, size) in sorted_files {
+            let child_id = nodes.len();
+            child_ids.push(child_id);
+            nodes.push(FileNode {
+                id: child_id,
+                name,
+                path: String::new(),
+                is_directory: false,
+                size,
+                child_ids: Vec::new(),
+                parent_id: Some(0),
+                created_at: None,
+            });
+        }
+
+        nodes[0].child_ids = child_ids;
+
+        // Emit final progress for UI updates
+        if let Some(handle) = app {
+            if let Some(sid) = scan_id {
+                let _ = handle.emit(
+                    "scan-progress",
+                    ProgressPayload {
+                        scan_id: Some(sid.to_string()),
+                        path: target_path.to_string(),
+                        count: nodes.len(),
+                    },
+                );
+            }
+        }
 
         if let Some(c) = cache {
             c.store_nodes(nodes.clone());
@@ -262,259 +372,5 @@ impl Scanner {
             }
         }
         false
-    }
-
-    fn is_always_skipped_path(path: &Path) -> bool {
-        #[cfg(target_os = "macos")]
-        {
-            let path_str = path.to_string_lossy().to_lowercase();
-            path_str.contains(".photoslibrary")
-                || path_str.contains(".musiclibrary")
-                || path_str.contains("library/mail")
-                || path_str.contains("library/messages")
-                || path_str.contains("library/safari")
-                || path_str.contains("library/homekit")
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            false
-        }
-    }
-
-    fn is_protected_tcc_path(path: &Path, home: &Option<PathBuf>, home_canonical: &Option<PathBuf>) -> bool {
-        #[cfg(target_os = "macos")]
-        {
-            let check_strip = |base_path: &Path| -> bool {
-                if let Ok(rel) = path.strip_prefix(base_path) {
-                    let rel_str = rel.to_string_lossy();
-                    if rel_str == "Desktop"
-                        || rel_str == "Documents"
-                        || rel_str == "Downloads"
-                        || rel_str == "Pictures"
-                        || rel_str == "Movies"
-                        || rel_str == "Music"
-                    {
-                        return true;
-                    }
-                }
-                false
-            };
-
-            if let Some(h) = home {
-                if check_strip(h) {
-                    return true;
-                }
-            }
-            if let Some(hc) = home_canonical {
-                if check_strip(hc) {
-                    return true;
-                }
-            }
-        }
-        false
-    }
-
-    fn walk_parallel(
-        dir: &Path,
-        created_at: Option<u64>,
-        progress: &Arc<AtomicUsize>,
-        app: Option<&AppHandle>,
-        scan_start: Instant,
-        last_emit_ms: &Arc<AtomicU64>,
-        scan_id: Option<&str>,
-        target_path: &Path,
-        home: &Option<PathBuf>,
-        home_canonical: &Option<PathBuf>,
-    ) -> RawDir {
-        let has_fda = crate::services::disk::has_full_disk_access();
-
-        let should_bypass = if cfg!(target_os = "macos") {
-            if Self::is_always_skipped_path(dir) {
-                true
-            } else if !has_fda && dir != target_path {
-                Self::is_protected_tcc_path(dir, home, home_canonical)
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        if should_bypass {
-            let name = dir
-                .file_name()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_else(|| dir.to_string_lossy().into_owned());
-            return RawDir {
-                name,
-                path: dir.to_path_buf(),
-                size: 0,
-                created_at,
-                files: Vec::new(),
-                subdirs: Vec::new(),
-            };
-        }
-        let mut file_entries = Vec::new();
-        let mut dir_entries = Vec::new();
-
-        if let Ok(read_dir) = fs::read_dir(dir) {
-            for entry in read_dir.flatten() {
-                if let Ok(ft) = entry.file_type() {
-                    if ft.is_symlink() {
-                        continue;
-                    }
-                    if ft.is_dir() {
-                        let name = entry.file_name();
-                        if !Self::should_skip_directory(dir, &name) {
-                            dir_entries.push(entry);
-                        }
-                    } else if ft.is_file() {
-                        file_entries.push(entry);
-                    }
-                }
-            }
-        }
-
-        let process_file = |entry: fs::DirEntry| {
-            let meta = entry.metadata().ok();
-            let size = meta.as_ref().map(get_file_physical_size).unwrap_or(0);
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let count = progress.fetch_add(1, Ordering::Relaxed) + 1;
-            if count == 1 || count % 2000 == 0 {
-                Self::emit_progress_throttled(app, dir, count, scan_start, last_emit_ms, scan_id);
-            }
-            Some(RawFile { name, size, created_at: None })
-        };
-
-        let files: Vec<RawFile> = if file_entries.len() > 16 {
-            file_entries.into_par_iter().filter_map(process_file).collect()
-        } else {
-            file_entries.into_iter().filter_map(process_file).collect()
-        };
-
-        let subdirs: Vec<RawDir> = dir_entries
-            .par_iter()
-            .map(|entry| {
-                let entry_path = entry.path();
-                Self::walk_parallel(
-                    &entry_path,
-                    None,
-                    progress,
-                    app,
-                    scan_start,
-                    last_emit_ms,
-                    scan_id,
-                    target_path,
-                    home,
-                    home_canonical,
-                )
-            })
-            .collect();
-
-        let file_size: u64 = files.iter().map(|f| f.size).sum();
-        let dir_size: u64 = subdirs.iter().map(|d| d.size).sum();
-
-        let name = dir
-            .file_name()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| dir.to_string_lossy().into_owned());
-
-        RawDir {
-            name,
-            path: dir.to_path_buf(),
-            size: file_size + dir_size,
-            created_at,
-            files,
-            subdirs,
-        }
-    }
-
-    fn emit_progress_throttled(
-        app: Option<&AppHandle>,
-        dir: &Path,
-        count: usize,
-        scan_start: Instant,
-        last_emit_ms: &Arc<AtomicU64>,
-        scan_id: Option<&str>,
-    ) {
-        let elapsed_ms = scan_start.elapsed().as_millis() as u64;
-        let last_ms = last_emit_ms.load(Ordering::Relaxed);
-
-        if count > 1 && elapsed_ms.saturating_sub(last_ms) < 150 {
-            return;
-        }
-
-        if last_emit_ms
-            .compare_exchange(last_ms, elapsed_ms, Ordering::Relaxed, Ordering::Relaxed)
-            .is_ok()
-        {
-            if let Some(handle) = app {
-                let _ = handle.emit(
-                    "scan-progress",
-                    ProgressPayload {
-                        scan_id: scan_id.map(|s| s.to_string()),
-                        path: dir.to_string_lossy().into_owned(),
-                        count,
-                    },
-                );
-            }
-        }
-    }
-}
-
-// ─── Phase 2: Flatten Tree → Vec<FileNode> ──────────────────────────────────
-
-impl Scanner {
-    fn flatten_tree(
-        raw: &RawDir,
-        parent_id: Option<usize>,
-        nodes: &mut Vec<FileNode>,
-    ) {
-        let dir_id = nodes.len();
-
-        nodes.push(FileNode {
-            id: dir_id,
-            name: raw.name.clone(),
-            path: if parent_id.is_none() { raw.path.to_string_lossy().into_owned() } else { String::new() },
-            is_directory: true,
-            size: raw.size,
-            child_ids: Vec::new(),
-            parent_id,
-            created_at: raw.created_at,
-        });
-
-        let mut child_ids = Vec::with_capacity(raw.subdirs.len() + raw.files.len());
-
-        let mut sorted_dirs: Vec<usize> = (0..raw.subdirs.len()).collect();
-        sorted_dirs.sort_unstable_by(|&a, &b| raw.subdirs[b].size.cmp(&raw.subdirs[a].size));
-
-        for idx in sorted_dirs {
-            let child_id = nodes.len();
-            child_ids.push(child_id);
-            Self::flatten_tree(&raw.subdirs[idx], Some(dir_id), nodes);
-        }
-
-        let mut sorted_files: Vec<usize> = (0..raw.files.len()).collect();
-        sorted_files.sort_unstable_by(|&a, &b| raw.files[b].size.cmp(&raw.files[a].size));
-
-        for (rank, &idx) in sorted_files.iter().enumerate() {
-            let file = &raw.files[idx];
-            if rank < 60 || file.size >= 102_400 {
-                let file_id = nodes.len();
-                child_ids.push(file_id);
-                nodes.push(FileNode {
-                    id: file_id,
-                    name: file.name.clone(),
-                    path: String::new(),
-                    is_directory: false,
-                    size: file.size,
-                    child_ids: Vec::new(),
-                    parent_id: Some(dir_id),
-                    created_at: file.created_at,
-                });
-            }
-        }
-
-        nodes[dir_id].child_ids = child_ids;
     }
 }

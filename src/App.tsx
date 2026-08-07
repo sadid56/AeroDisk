@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useScanner } from "./hooks/useScanner";
 import { useDiskInfo } from "./hooks/useDiskInfo";
 import { useSystemDrives } from "./hooks/useSystemDrives";
@@ -47,10 +47,12 @@ export const App: React.FC = () => {
   } = useScanner();
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const [scanOrigin, setScanOrigin] = useState<string>("/");
 
   const rootPath = flatNodes[0]?.path;
   const { refreshDiskInfo } = useDiskInfo(rootPath);
-  const { drives, folders, refetch: refetchDrives } = useSystemDrives();
+  const { drives, folders, loading: drivesLoading, refetch: refetchDrives } = useSystemDrives();
   const { largeFiles, cleanupSuggestions, duplicateGroups, loading: toolsLoading, refetchTools } = useToolsData();
   const { checkFDA, requestFDA } = useFullDiskAccess();
   const [showFdaModal, setShowFdaModal] = useState<boolean>(false);
@@ -90,6 +92,7 @@ export const App: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
   useEffect(() => {
+    localStorage.removeItem("hyperdisk_scan_history");
     const savedMode = (localStorage.getItem("hyperdisk_theme_mode") as ThemeMode) || "dark";
     const savedFont = localStorage.getItem("hyperdisk_font");
     applyThemeMode(savedMode);
@@ -98,6 +101,9 @@ export const App: React.FC = () => {
 
   const handleScanPath = useCallback(async (path: string) => {
     try {
+      if (location.pathname !== "/analyzer") {
+        setScanOrigin(location.pathname);
+      }
       navigate("/analyzer");
       let finalPath = path;
       if (path.startsWith("~")) {
@@ -105,21 +111,10 @@ export const App: React.FC = () => {
         finalPath = path.replace("~", home);
       }
       await startScan(finalPath);
-
-      // Save to recent scans
-      try {
-        const historyJson = localStorage.getItem("hyperdisk_scan_history") || "[]";
-        const history: string[] = JSON.parse(historyJson);
-        const filtered = history.filter((p) => p !== finalPath);
-        filtered.unshift(finalPath);
-        localStorage.setItem("hyperdisk_scan_history", JSON.stringify(filtered.slice(0, 10)));
-      } catch (e) {
-        console.error(e);
-      }
     } catch (err: any) {
       showToast({ message: "Scan Error", description: err?.message || String(err), type: "error" });
     }
-  }, [navigate, startScan]);
+  }, [navigate, startScan, location.pathname]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
     e.preventDefault();
@@ -168,9 +163,17 @@ export const App: React.FC = () => {
   }, [pendingDeleteNode, removeNode, currentId, navigateTo, rootPath, refreshDiskInfo, flatNodes]);
 
   const handleSelectFolder = useCallback(() => {
+    if (location.pathname !== "/analyzer") {
+      setScanOrigin(location.pathname);
+    }
     navigate("/analyzer");
     selectFolderDialog();
-  }, [navigate, selectFolderDialog]);
+  }, [navigate, selectFolderDialog, location.pathname]);
+
+  const handleBackToOrigin = useCallback(() => {
+    navigate(scanOrigin);
+    resetToDashboard();
+  }, [navigate, scanOrigin, resetToDashboard]);
 
   const handleDashboard = useCallback(() => {
     resetToDashboard();
@@ -279,9 +282,11 @@ export const App: React.FC = () => {
           onContextMenu={handleContextMenu}
           onScanPath={handleScanPath}
           onSelectFolder={handleSelectFolder}
+          onBackToOrigin={handleBackToOrigin}
           updater={updater}
           drives={drives}
           folders={folders}
+          drivesLoading={drivesLoading}
           largeFiles={largeFiles}
           cleanupSuggestions={cleanupSuggestions}
           duplicateGroups={duplicateGroups}

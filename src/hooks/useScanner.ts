@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { showToast } from "../providers/ToastProvider";
 import { FileNode, ProgressPayload, ScanCompletePayload, ScanDeltaPayload, ScanErrorPayload } from "../types";
+import { getFullPath } from "../utils/pathUtils";
 
 export function useScanner() {
   const [flatNodes, setFlatNodes] = useState<FileNode[]>([]);
@@ -199,7 +200,48 @@ export function useScanner() {
   }, [startScan]);
 
   const navigateTo = useCallback(
-    (nodeId: number) => {
+    async (nodeId: number) => {
+      const targetNode = flatNodes[nodeId];
+      if (
+        targetNode &&
+        targetNode.isDirectory &&
+        (!targetNode.childIds || targetNode.childIds.length === 0)
+      ) {
+        setIsScanning(true);
+        setScanStatusPath("Analyzing folder...");
+        try {
+          const fullPath = getFullPath(nodeId, flatNodes);
+          const newChildren = await invoke<FileNode[]>("scan_directory_shallow", {
+            targetPath: fullPath,
+            parentId: nodeId,
+            startId: flatNodes.length,
+          });
+
+          setFlatNodes((prevNodes) => {
+            const nextNodes = [...prevNodes];
+            const childIds = newChildren.map((n) => n.id);
+            nextNodes[nodeId] = {
+              ...nextNodes[nodeId],
+              childIds,
+            };
+            // Append new children
+            for (const child of newChildren) {
+              nextNodes[child.id] = child;
+            }
+            return nextNodes;
+          });
+        } catch (err) {
+          console.error("Failed to lazy load directory:", err);
+          showToast({
+            message: "Scan Error",
+            description: String(err),
+            type: "error",
+          });
+        } finally {
+          setIsScanning(false);
+        }
+      }
+
       setCurrentId(nodeId);
       setBreadcrumbIds(() => {
         // Build path hierarchy from target node up to root

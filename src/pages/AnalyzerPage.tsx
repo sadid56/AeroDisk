@@ -20,6 +20,7 @@ interface AnalyzerPageProps {
   onSelectNode: (node: FileNode | null) => void;
   onNavigate: (id: number) => void;
   onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
+  onBackToOrigin: () => void;
 }
 
 export const AnalyzerPage: React.FC<AnalyzerPageProps> = React.memo(
@@ -38,6 +39,7 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = React.memo(
     onSelectNode,
     onNavigate,
     onContextMenu,
+    onBackToOrigin,
   }) => {
     return (
       <div className='flex-1 flex flex-col min-h-0 animate-in fade-in duration-150'>
@@ -45,8 +47,9 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = React.memo(
           activeNode={activeNode}
           flatNodes={flatNodes}
           breadcrumbIds={breadcrumbIds}
-          totalItems={flatNodes.length}
+          totalItems={activeNode?.childIds?.length || 0}
           onNavigate={onNavigate}
+          onBackToOrigin={onBackToOrigin}
         />
 
         <div className='flex-1 grid grid-cols-1 md:grid-cols-12 min-h-0 border-b border-surface-border'>

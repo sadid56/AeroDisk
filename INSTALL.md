@@ -2,6 +2,10 @@
 
 Since HyperDisk is a high-performance disk space analyzer, it requires Full Disk Access to scan all directories. Because it is distributed as an unsigned application bundle, macOS applies security restrictions (Gatekeeper and translocation quarantine) by default. 
 
+> [!TIP]
+> **Using the One-Line Installer?**
+> If you installed HyperDisk using the [one-line installation script](README.md#linux-and-macos-one-line-installer), it has already removed the quarantine flags for you. You can skip **Step 2** and **Step 3** entirely and proceed directly to **Step 4: Grant Full Disk Access**.
+
 Follow these steps to install HyperDisk and configure it correctly.
 
 ---

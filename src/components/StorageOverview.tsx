@@ -11,10 +11,11 @@ interface StorageOverviewProps {
   breadcrumbIds: number[];
   totalItems: number;
   onNavigate: (nodeId: number) => void;
+  onBackToOrigin: () => void;
 }
 
 export const StorageOverview: React.FC<StorageOverviewProps> = React.memo(
-  ({ activeNode, flatNodes, breadcrumbIds, totalItems, onNavigate }) => {
+  ({ activeNode, flatNodes, breadcrumbIds, totalItems, onNavigate, onBackToOrigin }) => {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -35,15 +36,16 @@ export const StorageOverview: React.FC<StorageOverviewProps> = React.memo(
           <Button
             variant='outline'
             size='icon'
-            disabled={parentId == null && (activeNode == null || activeNode.parentId == null)}
             onClick={() => {
-              if (parentId !== null) {
+              if (parentId != null) {
                 onNavigate(parentId);
-              } else if (activeNode && activeNode.parentId !== null) {
+              } else if (activeNode && activeNode.parentId != null) {
                 onNavigate(activeNode.parentId);
+              } else {
+                onBackToOrigin();
               }
             }}
-            title='Back to parent folder'
+            title='Back'
           >
             <ArrowLeft className='w-3.5 h-3.5' />
           </Button>
