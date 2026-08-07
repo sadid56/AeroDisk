@@ -9,79 +9,21 @@ import { Container } from "../components/common/Container";
 import { useFullDiskAccess } from "../hooks/useFullDiskAccess";
 import { showToast } from "../providers/ToastProvider";
 
-export type ThemeMode = 'dark' | 'light' | 'system';
-
-const DEFAULT_FONTS = [
-  'Inter',
-  'system-ui',
-  'JetBrains Mono',
-  'Roboto',
-  'Fira Code',
-  'Segoe UI',
-  'Cantarell',
-  'Noto Sans',
-  'Ubuntu',
-  'Monospace',
-  'Georgia',
-  'Times New Roman',
-];
-
-export function applyThemeMode(mode: ThemeMode) {
-  let isDark = mode === 'dark';
-  if (mode === 'system') {
-    isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }
-
-  const root = document.documentElement;
-
-  if (isDark) {
-    root.style.setProperty("--bg-color", "#1a1a2e");
-    root.style.setProperty("--surface-color", "#1e1e33");
-    root.style.setProperty("--surface-hover-color", "#262640");
-    root.style.setProperty("--surface-border-color", "#2e2e48");
-    root.style.setProperty('--text-color', '#f1f5f9');
-    root.style.setProperty('--text-primary', '#f8fafc');
-    root.style.setProperty('--text-secondary', '#cbd5e1');
-    root.style.setProperty('--text-muted', '#94a3b8');
-    root.style.setProperty('--accent-purple-color', '#8b5cf6');
-    root.style.setProperty('--accent-blue-color', '#3b82f6');
-    root.style.setProperty('--btn-primary-bg', '#334155');
-    root.style.setProperty('--btn-primary-hover', '#475569');
-    root.style.setProperty('--btn-primary-text', '#f8fafc');
-    root.style.setProperty('--btn-primary-border', '#475569');
-  } else {
-    root.style.setProperty('--bg-color', '#f1f5f9');
-    root.style.setProperty('--surface-color', '#ffffff');
-    root.style.setProperty('--surface-hover-color', '#e2e8f0');
-    root.style.setProperty('--surface-border-color', '#cbd5e1');
-    root.style.setProperty('--text-color', '#0f172a');
-    root.style.setProperty('--text-primary', '#020617');
-    root.style.setProperty('--text-secondary', '#334155');
-    root.style.setProperty('--text-muted', '#64748b');
-    root.style.setProperty('--accent-purple-color', '#7c3aed');
-    root.style.setProperty('--accent-blue-color', '#2563eb');
-    root.style.setProperty('--btn-primary-bg', '#1e293b');
-    root.style.setProperty('--btn-primary-hover', '#334155');
-    root.style.setProperty('--btn-primary-text', '#ffffff');
-    root.style.setProperty('--btn-primary-border', '#1e293b');
-  }
-
-  localStorage.setItem('aerodisk_theme_mode', mode);
-}
-
-export function applyFont(fontFamily: string) {
-  const fontStr = `"${fontFamily}", system-ui, -apple-system, sans-serif`;
-  const root = document.documentElement;
-  root.style.setProperty('--font-custom', fontStr);
-  root.style.setProperty('--font-sans', fontStr);
-  document.body.style.fontFamily = fontStr;
-  localStorage.setItem('aerodisk_font', fontFamily);
-}
+import { ThemeMode, DEFAULT_FONTS, applyThemeMode, applyFont } from "../theme/themeManager";
 
 interface SettingsPageProps {
   onBackToAnalyzer: () => void;
+  updater: {
+    checking: boolean;
+    updateAvailable: boolean;
+    updateInfo: { version: string; date?: string; body?: string } | null;
+    installing: boolean;
+    progressPercent: number;
+    checkForUpdates: (isManual: boolean) => Promise<boolean>;
+    startUpdate: () => Promise<void>;
+  };
 }
-export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
+export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }) => {
   const navigate = useNavigate();
   const [selectedFont, setSelectedFont] = useState<string>("Inter");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
@@ -350,14 +292,63 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(() => {
             </div>
           </div>
 
-          <div className='flex items-center justify-between p-4 bg-background/50 border border-surface-border rounded-xl'>
-            <div>
-              <h3 className='font-bold text-xs text-text-primary'>Current Version: v{appVersion}</h3>
-              <p className='text-[10px] text-text-muted mt-0.5'>Check release status and manage download parameters</p>
+          <div className='p-4 bg-background/50 border border-surface-border rounded-xl space-y-4'>
+            <div className='flex items-center justify-between gap-4'>
+              <div>
+                <h3 className='font-bold text-xs text-text-primary'>Current Version: v{appVersion}</h3>
+                <p className='text-[10px] text-text-muted mt-0.5'>Manage software updates and installation parameters</p>
+              </div>
+              <Button
+                variant='outline'
+                onClick={() => updater.checkForUpdates(true)}
+                isLoading={updater.checking}
+                disabled={updater.installing}
+                className='text-xs shrink-0'
+              >
+                Check for Updates
+              </Button>
             </div>
-            <Button variant='outline' onClick={() => navigate("/updates")}>
-              Check & Manage Updates
-            </Button>
+
+            {updater.updateAvailable && updater.updateInfo && (
+              <div className='p-4 bg-accent-purple/10 border border-accent-purple/30 rounded-xl space-y-3 mt-4 animate-in slide-in-from-top-4 duration-250'>
+                <div className='flex items-start justify-between'>
+                  <div>
+                    <h4 className='font-bold text-xs text-text-primary'>New Release Available (v{updater.updateInfo.version})</h4>
+                    <p className='text-[9px] text-text-muted mt-0.5'>
+                      Released on: {updater.updateInfo.date ? new Date(updater.updateInfo.date).toLocaleDateString() : "N/A"}
+                    </p>
+                  </div>
+                  <span className='px-1.5 py-0.2 rounded-full text-[8px] font-bold bg-accent-purple text-white uppercase tracking-wider'>
+                    New
+                  </span>
+                </div>
+
+                {updater.updateInfo.body && (
+                  <div className='text-[10px] text-text-muted bg-background/50 border border-surface-border p-2.5 rounded-lg max-h-24 overflow-y-auto leading-relaxed whitespace-pre-wrap select-text scrollbar-thin scrollbar-thumb-surface-border font-mono'>
+                    {updater.updateInfo.body}
+                  </div>
+                )}
+
+                {updater.installing ? (
+                  <div className='space-y-1.5 pt-1'>
+                    <div className='flex items-center justify-between text-[10px] font-bold'>
+                      <span className='text-accent-purple animate-pulse'>Installing Update...</span>
+                      <span className='text-text-muted'>{updater.progressPercent}%</span>
+                    </div>
+                    <div className='w-full h-1.5 bg-background border border-surface-border rounded-full overflow-hidden'>
+                      <div
+                        className='h-full bg-gradient-to-r from-accent-purple to-accent-blue rounded-full transition-all duration-300 shadow-md'
+                        style={{ width: `${updater.progressPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <Button variant='primary' fullWidth onClick={updater.startUpdate} className='text-xs'>
+                    Update to v{updater.updateInfo.version} Now
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </Card>
       </Container>

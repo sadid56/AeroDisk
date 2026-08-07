@@ -1,12 +1,10 @@
-import React, { useState } from "react";
-import { File, AlertCircle } from "lucide-react";
-import { formatBytes } from "../utils/formatters";
-import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
+import React, { useState, useEffect } from "react";
+import { AlertCircle } from "lucide-react";
 import { LargeFile } from "../types";
 import { invoke } from "@tauri-apps/api/core";
 import { showToast } from "../providers/ToastProvider";
 import { AlertModal } from "../components/ui/AlertModal";
+import { LargeFileCard } from "../features/largefiles/LargeFileCard";
 
 const LoadingSkeleton = () => (
   <div className='space-y-4 animate-pulse py-2'>
@@ -31,7 +29,11 @@ interface LargeFilesPageProps {
 
 export const LargeFilesPage: React.FC<LargeFilesPageProps> = ({ largeFiles, loading, onRefresh }) => {
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [localLargeFiles, setLocalLargeFiles] = useState<LargeFile[]>(largeFiles);
+
+  useEffect(() => {
+    setLocalLargeFiles(largeFiles);
+  }, [largeFiles]);
 
   const handleDeleteClick = (path: string) => {
     setDeletingPath(path);
@@ -39,9 +41,14 @@ export const LargeFilesPage: React.FC<LargeFilesPageProps> = ({ largeFiles, load
 
   const handleConfirmDelete = async () => {
     if (!deletingPath) return;
-    setIsDeleting(true);
+    const targetPath = deletingPath;
+    
+    // Optimistically update frontend state
+    setLocalLargeFiles((prev) => prev.filter((file) => file.path !== targetPath));
+    setDeletingPath(null); // Close modal instantly
+
     try {
-      await invoke("delete_item_permanently", { targetPath: deletingPath });
+      await invoke("delete_item_permanently", { targetPath: targetPath });
       showToast({
         message: "File Deleted",
         description: "The file was successfully removed permanently.",
@@ -54,9 +61,7 @@ export const LargeFilesPage: React.FC<LargeFilesPageProps> = ({ largeFiles, load
         description: err?.message || String(err),
         type: "error",
       });
-    } finally {
-      setIsDeleting(false);
-      setDeletingPath(null);
+      onRefresh(); // Restore list if delete failed
     }
   };
 
@@ -68,47 +73,23 @@ export const LargeFilesPage: React.FC<LargeFilesPageProps> = ({ largeFiles, load
     <div className='flex-1 overflow-y-auto p-6 space-y-6 select-none scrollbar-none animate-in fade-in duration-300'>
       <div className='flex items-center justify-between border-b border-surface-border pb-4'>
         <div>
-          <h2 className='text-lg font-bold text-white'>Large Files</h2>
+          <h2 className='text-lg font-bold text-slate-100'>Large Files</h2>
           <p className='text-xs text-slate-500'>Find and manage large files occupying significant storage capacity.</p>
         </div>
       </div>
 
       {loading ? (
         <LoadingSkeleton />
-      ) : largeFiles.length === 0 ? (
+      ) : localLargeFiles.length === 0 ? (
         <EmptyState message='No large files found on your system.' />
       ) : (
         <div className='space-y-4'>
-          {largeFiles.map((file, idx) => (
-            <Card
+          {localLargeFiles.map((file, idx) => (
+            <LargeFileCard
               key={idx}
-              variant='default'
-              padding='sm'
-              className='flex items-center justify-between gap-4 hover:border-slate-800 transition-all duration-150'
-            >
-              <div className='flex items-center gap-3 min-w-0'>
-                <div className='w-10 h-10 rounded-lg bg-slate-500/10 border border-slate-500/10 text-slate-400 flex items-center justify-center shrink-0'>
-                  <File className='w-5 h-5' />
-                </div>
-                <div className='min-w-0'>
-                  <h4 className='text-sm font-bold text-slate-100 truncate'>{file.name}</h4>
-                  <p className='text-[10px] text-slate-500 font-mono truncate'>{file.path}</p>
-                </div>
-              </div>
-              <div className='flex items-center gap-6 shrink-0'>
-                <span className='px-2 py-0.5 rounded bg-slate-800 border border-surface-border text-[9px] font-bold text-slate-400 uppercase font-mono'>
-                  {file.file_type}
-                </span>
-                <span className='text-sm font-bold text-white font-mono'>{formatBytes(file.size)}</span>
-                <Button
-                  variant='outline'
-                  onClick={() => handleDeleteClick(file.path)}
-                  className='text-xs h-8 border-rose-500/20 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30'
-                >
-                  Delete
-                </Button>
-              </div>
-            </Card>
+              file={file}
+              onDeleteClick={handleDeleteClick}
+            />
           ))}
         </div>
       )}
@@ -121,7 +102,7 @@ export const LargeFilesPage: React.FC<LargeFilesPageProps> = ({ largeFiles, load
         confirmLabel='Delete Permanently'
         cancelLabel='Cancel'
         variant='danger'
-        isLoading={isDeleting}
+        isLoading={false}
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
       />

@@ -549,3 +549,78 @@ fn get_disk_smart_status(mount_point: &str) -> String {
         "Unknown".to_string()
     }
 }
+
+pub fn get_system_root_folders() -> Vec<UserFolder> {
+    let root_path = if cfg!(target_os = "windows") {
+        PathBuf::from("C:\\")
+    } else {
+        PathBuf::from("/")
+    };
+
+    let mut folders = Vec::new();
+    if let Ok(entries) = fs::read_dir(&root_path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(name_str) = path.file_name().and_then(|n| n.to_str()) {
+                    // Skip hidden directories (starting with '.')
+                    if name_str.starts_with('.') {
+                        continue;
+                    }
+                    
+                    // Skip system virtual/special folders on Unix
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        let name_lower = name_str.to_lowercase();
+                        if name_lower == "proc"
+                            || name_lower == "sys"
+                            || name_lower == "dev"
+                            || name_lower == "run"
+                            || name_lower == "tmp"
+                            || name_lower == "mnt"
+                            || name_lower == "media"
+                            || name_lower == "lost+found"
+                            || name_lower == "etc"
+                            || name_lower == "bin"
+                            || name_lower == "sbin"
+                            || name_lower == "boot"
+                            || name_lower == "lib"
+                            || name_lower == "lib64"
+                        {
+                            continue;
+                        }
+                    }
+
+                    // Skip system special folders on Windows
+                    #[cfg(target_os = "windows")]
+                    {
+                        let name_lower = name_str.to_lowercase();
+                        if name_lower.starts_with('$')
+                            || name_lower == "system volume information"
+                            || name_lower == "documents and settings"
+                        {
+                            continue;
+                        }
+                    }
+
+                    folders.push((name_str.to_string(), path));
+                }
+            }
+        }
+    }
+
+    folders
+        .into_par_iter()
+        .map(|(name, path_buf)| {
+            let size = get_dir_size_parallel(&path_buf);
+            let size_opt = if size > 0 { Some(size) } else { None };
+            UserFolder {
+                name,
+                path: path_buf.to_string_lossy().to_string(),
+                exists: true,
+                size: size_opt,
+            }
+        })
+        .collect()
+}
+

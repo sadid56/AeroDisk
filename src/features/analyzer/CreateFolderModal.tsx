@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useCreateFolder } from '../hooks/useCreateFolder';
+import { useCreateFolder } from '../../hooks/useCreateFolder';
 import { FolderPlus, X } from "lucide-react";
-import { showToast } from '../providers/ToastProvider';
-import { FileNode } from '../types';
-import { Button } from "./ui/Button";
+import { showToast } from '../../providers/ToastProvider';
+import { FileNode } from '../../types';
+import { Button } from "../../components/ui/Button";
 
 interface CreateFolderModalProps {
   isOpen: boolean;

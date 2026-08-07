@@ -1,5 +1,5 @@
 import React from 'react';
-import { useProtectedPath } from '../hooks/useProtectedPath';
+import { useProtectedPath } from '../../hooks/useProtectedPath';
 import {
   FolderOpen,
   ExternalLink,
@@ -9,9 +9,9 @@ import {
   ShieldAlert,
   Terminal,
 } from 'lucide-react';
-import { FileNode } from '../types';
-import { Dropdown, DropdownItem, DropdownDivider } from './ui/Dropdown';
-import { getFullPath } from '../utils/pathUtils';
+import { FileNode } from '../../types';
+import { Dropdown, DropdownItem, DropdownDivider } from '../../components/ui/Dropdown';
+import { getFullPath } from '../../utils/pathUtils';
 
 interface ContextMenuProps {
   x: number;

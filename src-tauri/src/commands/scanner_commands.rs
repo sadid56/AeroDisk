@@ -71,20 +71,24 @@ pub async fn scan_directory_shallow(
         if let Ok(read_dir) = fs::read_dir(root_path) {
             for entry in read_dir.flatten() {
                 if let Ok(ft) = entry.file_type() {
-                    if ft.is_symlink() {
-                        continue;
-                    }
-                    if ft.is_dir() {
-                        let name = entry.file_name();
-                        let name_str = name.to_string_lossy();
-                        if !name_str.starts_with('.') {
-                            dir_entries.push(entry);
+                    let is_symlink = ft.is_symlink();
+                    let mut is_dir = ft.is_dir();
+                    let mut is_file = ft.is_file();
+
+                    if is_symlink {
+                        if let Ok(target) = fs::canonicalize(entry.path()) {
+                            is_dir = target.is_dir();
+                            is_file = target.is_file();
                         }
-                    } else if ft.is_file() {
-                        let name = entry.file_name();
-                        let name_str = name.to_string_lossy();
-                        if !name_str.starts_with('.') {
-                            file_entries.push(entry);
+                    }
+
+                    let name = entry.file_name();
+                    let name_str = name.to_string_lossy();
+                    if !name_str.starts_with('.') {
+                        if is_dir {
+                            dir_entries.push((entry, is_symlink));
+                        } else if is_file {
+                            file_entries.push((entry, is_symlink));
                         }
                     }
                 }
@@ -94,36 +98,43 @@ pub async fn scan_directory_shallow(
         let has_fda = crate::services::disk::has_full_disk_access();
 
         // Process child subdirectories in parallel using Rayon
-        let dirs: Vec<(String, PathBuf, u64)> = dir_entries
+        let dirs: Vec<(String, PathBuf, u64, bool)> = dir_entries
             .into_par_iter()
-            .map(|entry| {
+            .map(|(entry, is_sym)| {
                 let entry_path = entry.path();
                 let name = entry.file_name().to_string_lossy().into_owned();
-                let size = if has_fda {
+                let size = if is_sym {
+                    0
+                } else if has_fda {
                     crate::services::get_dir_size_parallel(&entry_path)
                 } else {
                     0
                 };
-                (name, entry_path, size)
+                (name, entry_path, size, is_sym)
             })
             .collect();
 
         // Process child files
-        let files: Vec<(String, u64)> = file_entries
+        let files: Vec<(String, u64, bool)> = file_entries
             .into_iter()
-            .map(|entry| {
-                let meta = entry.metadata().ok();
-                #[cfg(unix)]
-                let size = meta.as_ref().map(|m| {
-                    use std::os::unix::fs::MetadataExt;
-                    let physical = m.blocks().saturating_mul(512);
-                    std::cmp::min(m.len(), physical)
-                }).unwrap_or(0);
-                #[cfg(not(unix))]
-                let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+            .map(|(entry, is_sym)| {
+                let size = if is_sym {
+                    0
+                } else {
+                    let meta = entry.metadata().ok();
+                    #[cfg(unix)]
+                    let s = meta.as_ref().map(|m| {
+                        use std::os::unix::fs::MetadataExt;
+                        let physical = m.blocks().saturating_mul(512);
+                        std::cmp::min(m.len(), physical)
+                    }).unwrap_or(0);
+                    #[cfg(not(unix))]
+                    let s = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+                    s
+                };
 
                 let name = entry.file_name().to_string_lossy().into_owned();
-                (name, size)
+                (name, size, is_sym)
             })
             .collect();
 
@@ -134,12 +145,13 @@ pub async fn scan_directory_shallow(
         let mut sorted_dirs = dirs;
         sorted_dirs.sort_unstable_by(|a, b| b.2.cmp(&a.2));
 
-        for (name, _path_buf, size) in sorted_dirs {
+        for (name, _path_buf, size, is_symlink) in sorted_dirs {
             nodes.push(FileNode {
                 id: next_id,
                 name,
                 path: String::new(),
                 is_directory: true,
+                is_symlink,
                 size,
                 child_ids: Vec::new(),
                 parent_id: Some(parent_id),
@@ -152,12 +164,13 @@ pub async fn scan_directory_shallow(
         let mut sorted_files = files;
         sorted_files.sort_unstable_by(|a, b| b.1.cmp(&a.1));
 
-        for (name, size) in sorted_files {
+        for (name, size, is_symlink) in sorted_files {
             nodes.push(FileNode {
                 id: next_id,
                 name,
                 path: String::new(),
                 is_directory: false,
+                is_symlink,
                 size,
                 child_ids: Vec::new(),
                 parent_id: Some(parent_id),

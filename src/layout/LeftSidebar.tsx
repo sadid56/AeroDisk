@@ -40,7 +40,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ onDashboard }) => {
           className='flex items-center gap-2.5 px-2 py-1.5 hover:opacity-95 text-left w-full cursor-pointer bg-transparent border-none focus:outline-none'
         >
           <img src={LogoIcon} className='w-9 h-9 shrink-0' alt='HyperDisk Logo' />
-          <h1 className='font-bold text-base text-white tracking-tight'>HyperDisk</h1>
+          <h1 className='font-bold text-base text-slate-100 tracking-tight'>HyperDisk</h1>
         </button>
 
         {/* Navigation Menu */}

@@ -36,19 +36,19 @@ export const Header: React.FC<HeaderProps> = React.memo(
     return (
       <header
         data-tauri-drag-region
-        className='h-16 px-6 border-b border-surface-border flex items-center justify-between z-20 shrink-0 select-none'
+        className='h-16 px-6 border-b border-surface-border flex items-center justify-between z-20 shrink-0 select-none shadow-sm'
       >
         {/* Search Trigger */}
         <div className='relative w-80'>
           <button
             onClick={onOpenSearchModal}
-            className='w-full bg-slate-950/40 border border-surface-border hover:border-slate-850 transition-colors rounded-lg py-1.5 pl-3 pr-3 text-slate-400 text-xs flex items-center justify-between cursor-pointer focus:outline-none'
+            className='w-full bg-slate-950/5 dark:bg-slate-950/40 border border-surface-border hover:bg-slate-950/10 dark:hover:bg-slate-950/50 transition-colors rounded-lg py-1.5 pl-3 pr-3 text-slate-400 text-xs flex items-center justify-between cursor-pointer focus:outline-none'
           >
             <div className='flex items-center gap-2'>
               <Search className='w-3.5 h-3.5 text-slate-500' />
               <span>Search folders or files...</span>
             </div>
-            <kbd className='font-sans text-[10px] bg-slate-850 px-1.5 py-0.5 rounded text-slate-500 font-bold border border-surface-border'>
+            <kbd className='font-sans text-[10px] bg-slate-950/5 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 font-bold border border-surface-border'>
               ⌘ K
             </kbd>
           </button>
@@ -67,7 +67,7 @@ export const Header: React.FC<HeaderProps> = React.memo(
               <Settings className='w-3.5 h-3.5' />
             </Button>
             {updateAvailable && (
-              <span className='absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-indigo-500 animate-pulse pointer-events-none' />
+              <span className='absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-indigo-500  pointer-events-none' />
             )}
           </div>
 

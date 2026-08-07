@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, X, CornerDownLeft } from 'lucide-react';
-import { FileNode } from '../types';
-import { formatBytes, getFileCategory, truncate } from '../utils/formatters';
-import { Button } from "./ui/Button";
-import { Card } from "./ui/Card";
-import { getFullPath } from "../utils/pathUtils";
-import { useSystemSearch } from "../hooks/useSystemSearch";
+import { FileNode } from '../../types';
+import { formatBytes, getFileCategory, truncate } from '../../utils/formatters';
+import { Button } from "../ui/Button";
+import { Card } from "../ui/Card";
+import { getFullPath } from "../../utils/pathUtils";
+import { useSystemSearch } from "../../hooks/useSystemSearch";
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -144,7 +144,7 @@ export const SearchModal: React.FC<SearchModalProps> = React.memo(({
           <input
             ref={inputRef}
             type='text'
-            placeholder={flatNodes.length > 0 ? 'Type to search indexed storage...' : 'Type to search system paths (Downloads, Docs, Desktop)...'}
+            placeholder={flatNodes.length > 0 ? 'Type to search indexed storage...' : 'Type to search system paths (Downloads, Docs, Desktop, Projects)...'}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className='w-full bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none font-medium'

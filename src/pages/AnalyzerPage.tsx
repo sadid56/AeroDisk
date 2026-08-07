@@ -1,8 +1,8 @@
 import React from "react";
-import { StorageOverview } from "../components/StorageOverview";
-import { SunburstChart } from "../components/SunburstChart";
-import { FileList } from "../components/FileList";
-import { FocusCard } from "../components/FocusCard";
+import { StorageOverview } from "../features/analyzer/StorageOverview";
+import { SunburstChart } from "../features/analyzer/SunburstChart";
+import { FileList } from "../features/analyzer/FileList";
+import { FocusCard } from "../components/common/FocusCard";
 import { FileNode } from "../types";
 
 interface AnalyzerPageProps {

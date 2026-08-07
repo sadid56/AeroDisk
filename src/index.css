@@ -1,7 +1,27 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --font-custom: "Inter", system-ui, -apple-system, sans-serif;
+  --bg-color: #f1f5f9;
+  --surface-color: #ffffff;
+  --surface-hover-color: #e2e8f0;
+  --surface-border-color: #e2e8f0;
+  --text-color: #0f172a;
+  --text-primary: #020617;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --accent-purple-color: #7c3aed;
+  --accent-blue-color: #2563eb;
+  --btn-primary-bg: #1e293b;
+  --btn-primary-hover: #334155;
+  --btn-primary-text: #ffffff;
+  --btn-primary-border: #1e293b;
+  --custom-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 3px 12px -3px rgba(0, 0, 0, 0.03);
+}
+
+.dark {
   --bg-color: #1a1a2e;
   --surface-color: #1e1e33;
   --surface-hover-color: #262640;
@@ -16,6 +36,7 @@
   --btn-primary-hover: #475569;
   --btn-primary-text: #f8fafc;
   --btn-primary-border: #475569;
+  --custom-shadow: none;
 }
 
 @theme {
@@ -54,6 +75,11 @@
   .text-slate-500 {
     color: var(--text-muted) !important;
   }
+  
+  /* Theme-adaptive shadows (maps Tailwind shadow classes to --custom-shadow) */
+  .shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl {
+    box-shadow: var(--custom-shadow) !important;
+  }
 }
 
 /* Permanent Minimal Always-Visible Custom Scrollbar (Zero auto-hiding, zero flickering) */
@@ -75,7 +101,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-purple-color, #8b5cf6) !important;
+  background: var(--accent-purple-color, #9188a7) !important;
 }
 
 /* Ambient Glow Overlay */
@@ -88,3 +114,10 @@
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
+
+/* Disable browser default focus outlines/rings globally */
+*:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+

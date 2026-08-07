@@ -3,6 +3,7 @@ export interface FileNode {
   name: string;
   path: string;
   isDirectory?: boolean;
+  isSymlink?: boolean;
   size: number;
   childIds: number[];
   parentId: number | null;

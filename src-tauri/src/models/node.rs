@@ -17,6 +17,8 @@ pub struct FileNode {
     pub path: String,
     #[serde(skip_serializing_if = "is_false")]
     pub is_directory: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub is_symlink: bool,
     pub size: u64,
     #[serde(skip_serializing_if = "is_empty_vec")]
     pub child_ids: Vec<usize>,

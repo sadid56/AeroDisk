@@ -1,24 +1,32 @@
 use crate::services::trash;
 
 #[tauri::command]
-pub fn delete_target_item(target_path: String) -> Result<(), String> {
-    trash::delete_item(&target_path)
+pub async fn delete_target_item(target_path: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        trash::delete_item(&target_path)
+    })
+    .await
+    .map_err(|e| format!("Tokio task join error: {}", e))?
 }
 
 #[tauri::command]
-pub fn delete_item_permanently(target_path: String) -> Result<(), String> {
+pub async fn delete_item_permanently(target_path: String) -> Result<(), String> {
     if crate::services::trash::is_protected_system_path(&target_path) {
         return Err("Cannot delete system directory permanently".to_string());
     }
-    let path = std::path::Path::new(&target_path);
-    if !path.exists() {
-        return Err("Target path does not exist".to_string());
-    }
-    if path.is_dir() {
-        std::fs::remove_dir_all(path).map_err(|e| format!("Failed to delete folder: {}", e))
-    } else {
-        std::fs::remove_file(path).map_err(|e| format!("Failed to delete file: {}", e))
-    }
+    tokio::task::spawn_blocking(move || {
+        let path = std::path::Path::new(&target_path);
+        if !path.exists() {
+            return Err("Target path does not exist".to_string());
+        }
+        if path.is_dir() {
+            std::fs::remove_dir_all(path).map_err(|e| format!("Failed to delete folder: {}", e))
+        } else {
+            std::fs::remove_file(path).map_err(|e| format!("Failed to delete file: {}", e))
+        }
+    })
+    .await
+    .map_err(|e| format!("Tokio task join error: {}", e))?
 }
 
 #[tauri::command]

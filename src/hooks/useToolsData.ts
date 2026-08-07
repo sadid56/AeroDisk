@@ -6,24 +6,51 @@ export function useToolsData() {
   const [largeFiles, setLargeFiles] = useState<LargeFile[]>([]);
   const [cleanupSuggestions, setCleanupSuggestions] = useState<CleanupSuggestion[]>([]);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  
+  const [largeFilesLoading, setLargeFilesLoading] = useState<boolean>(true);
+  const [cleanupLoading, setCleanupLoading] = useState<boolean>(true);
+  const [duplicatesLoading, setDuplicatesLoading] = useState<boolean>(true);
 
   const refetchTools = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [fetchedLarge, fetchedCleanup, fetchedDuplicates] = await Promise.all([
-        invoke<LargeFile[]>('fetch_large_files'),
-        invoke<CleanupSuggestion[]>('fetch_cleanup_suggestions'),
-        invoke<DuplicateGroup[]>('fetch_duplicate_files'),
-      ]);
-      setLargeFiles(fetchedLarge || []);
-      setCleanupSuggestions(fetchedCleanup || []);
-      setDuplicateGroups(fetchedDuplicates || []);
-    } catch (err) {
-      console.error('Failed to fetch tools data:', err);
-    } finally {
-      setLoading(false);
-    }
+    setLargeFilesLoading(true);
+    setCleanupLoading(true);
+    setDuplicatesLoading(true);
+
+    // 1. Fetch large files
+    invoke<LargeFile[]>('fetch_large_files')
+      .then((res) => {
+        setLargeFiles(res || []);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch large files:', err);
+      })
+      .finally(() => {
+        setLargeFilesLoading(false);
+      });
+
+    // 2. Fetch cleanup suggestions (very fast)
+    invoke<CleanupSuggestion[]>('fetch_cleanup_suggestions')
+      .then((res) => {
+        setCleanupSuggestions(res || []);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch cleanup suggestions:', err);
+      })
+      .finally(() => {
+        setCleanupLoading(false);
+      });
+
+    // 3. Fetch duplicate files (slowest, walks whole home folder)
+    invoke<DuplicateGroup[]>('fetch_duplicate_files')
+      .then((res) => {
+        setDuplicateGroups(res || []);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch duplicate files:', err);
+      })
+      .finally(() => {
+        setDuplicatesLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -34,7 +61,9 @@ export function useToolsData() {
     largeFiles,
     cleanupSuggestions,
     duplicateGroups,
-    loading,
+    largeFilesLoading,
+    cleanupLoading,
+    duplicatesLoading,
     refetchTools,
   };
 }

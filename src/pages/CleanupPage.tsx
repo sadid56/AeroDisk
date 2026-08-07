@@ -1,12 +1,12 @@
-import React, { useState } from "react";
-import { Trash2, HardDrive, AlertCircle, Sparkles, Folder, File } from "lucide-react";
+import React, { useState, useCallback } from "react";
+import { Trash2, HardDrive, AlertCircle, Sparkles, Folder, File, FileText, Package, Image, ShieldAlert } from "lucide-react";
 import { formatBytes } from "../utils/formatters";
 import { Button } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
 import { CleanupSuggestion, DirectoryEntry } from "../types";
 import { invoke } from "@tauri-apps/api/core";
 import { showToast } from "../providers/ToastProvider";
 import { AlertModal } from "../components/ui/AlertModal";
+import { CleanupItemCard } from "../features/cleanup/CleanupItemCard";
 
 const LoadingSkeleton = () => (
   <div className='space-y-4 animate-pulse py-2'>
@@ -35,9 +35,11 @@ export const CleanupPage: React.FC<CleanupPageProps> = ({ cleanupSuggestions, lo
   const [detailsTarget, setDetailsTarget] = useState<{ id: string; title: string } | null>(null);
   const [detailsList, setDetailsList] = useState<DirectoryEntry[]>([]);
   const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
+  const [individualDeleteTarget, setIndividualDeleteTarget] = useState<{ path: string; name: string } | null>(null);
 
   const handleCleanup = async (id: string, title: string) => {
     setCleaningId(id);
+    setConfirmTarget(null); // Close modal instantly
     try {
       await invoke("execute_system_cleanup", { id });
       showToast({
@@ -45,14 +47,13 @@ export const CleanupPage: React.FC<CleanupPageProps> = ({ cleanupSuggestions, lo
         type: "success",
       });
       onRefresh();
-      setConfirmTarget(null);
     } catch (err) {
       console.error(err);
       showToast({
         message: `Failed to clean up ${title}.`,
         type: "error",
       });
-      setConfirmTarget(null);
+      onRefresh(); // Refresh to ensure sync
     } finally {
       setCleaningId(null);
     }
@@ -75,23 +76,9 @@ export const CleanupPage: React.FC<CleanupPageProps> = ({ cleanupSuggestions, lo
     }
   };
 
-  const handleIndividualDelete = async (path: string, name: string) => {
-    try {
-      await invoke("delete_item_permanently", { targetPath: path });
-      showToast({
-        message: `Successfully deleted ${name}.`,
-        type: "success",
-      });
-      setDetailsList((prev) => prev.filter((item) => item.path !== path));
-      onRefresh();
-    } catch (err) {
-      console.error(err);
-      showToast({
-        message: `Failed to delete ${name}: ${err}`,
-        type: "error",
-      });
-    }
-  };
+  const handleIndividualDelete = useCallback((path: string, name: string) => {
+    setIndividualDeleteTarget({ path, name });
+  }, []);
 
   const getIcon = (id: string) => {
     switch (id) {
@@ -101,6 +88,14 @@ export const CleanupPage: React.FC<CleanupPageProps> = ({ cleanupSuggestions, lo
         return { icon: Sparkles, color: "text-slate-400 border-slate-500/10 bg-slate-500/10" };
       case "dev_caches":
         return { icon: HardDrive, color: "text-slate-400 border-slate-500/10 bg-slate-500/10" };
+      case "system_logs":
+        return { icon: FileText, color: "text-slate-400 border-slate-500/10 bg-slate-500/10" };
+      case "package_caches":
+        return { icon: Package, color: "text-slate-400 border-slate-500/10 bg-slate-500/10" };
+      case "thumbnail_caches":
+        return { icon: Image, color: "text-slate-400 border-slate-500/10 bg-slate-500/10" };
+      case "crash_reports":
+        return { icon: ShieldAlert, color: "text-slate-400 border-slate-500/10 bg-slate-500/10" };
       default:
         return { icon: AlertCircle, color: "text-slate-400 border-slate-500/10 bg-slate-500/10" };
     }
@@ -110,62 +105,32 @@ export const CleanupPage: React.FC<CleanupPageProps> = ({ cleanupSuggestions, lo
     <div className='flex-1 overflow-y-auto p-6 space-y-6 select-none scrollbar-none animate-in fade-in duration-300'>
       <div className='flex items-center justify-between border-b border-surface-border pb-4'>
         <div>
-          <h2 className='text-lg font-bold text-white'>Cleanup Suggestions</h2>
+          <h2 className='text-lg font-bold text-slate-100'>Cleanup Suggestions</h2>
           <p className='text-xs text-slate-500'>Remove unneeded files, system cache, or empty the trash bin instantly.</p>
         </div>
       </div>
 
       {loading ? (
         <LoadingSkeleton />
-      ) : cleanupSuggestions.length === 0 ? (
+      ) : cleanupSuggestions.filter((item) => item.size > 0).length === 0 ? (
         <EmptyState message='No cleanup recommendations at this time.' />
       ) : (
         <div className='space-y-4'>
-          {cleanupSuggestions.map((item, idx) => {
-            const config = getIcon(item.id);
-            const Icon = config.icon;
-            return (
-              <Card
+          {cleanupSuggestions
+            .filter((item) => item.size > 0)
+            .map((item, idx) => (
+              <CleanupItemCard
                 key={idx}
-                variant='default'
-                padding='sm'
-                className='flex items-center justify-between gap-4 hover:border-slate-800 transition-all duration-150'
-              >
-                <div className='flex items-center gap-3.5 min-w-0'>
-                  <div className={`w-10 h-10 rounded-lg border flex items-center justify-center shrink-0 ${config.color}`}>
-                    <Icon className='w-5 h-5' />
-                  </div>
-                  <div className='min-w-0 space-y-0.5'>
-                    <h4 className='text-sm font-bold text-slate-100'>{item.title}</h4>
-                    <p className='text-xs text-slate-500 truncate max-w-[450px]'>{item.desc}</p>
-                  </div>
-                </div>
-
-                <div className='flex items-center gap-6 shrink-0'>
-                  <span className='text-sm font-bold text-white font-mono'>{formatBytes(item.size)}</span>
-                  <div className='flex items-center gap-2'>
-                    <Button
-                      variant='outline'
-                      onClick={() => handleOpenDetails(item.id, item.title)}
-                      className='text-xs h-8 border-slate-800 hover:bg-slate-900/60 hover:text-white font-bold'
-                    >
-                      Details
-                    </Button>
-                    <Button
-                      variant='outline'
-                      disabled={cleaningId !== null}
-                      onClick={() => setConfirmTarget({ id: item.id, title: item.title })}
-                      className='text-xs h-8 border-rose-500/20 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/30 font-bold'
-                    >
-                      Clean Up
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
+                item={item}
+                cleaningId={cleaningId}
+                onOpenDetails={handleOpenDetails}
+                onCleanClick={(id, title) => setConfirmTarget({ id, title })}
+                getIcon={getIcon}
+              />
+            ))}
         </div>
       )}
+
 
       {/* Confirmation Modal */}
       <AlertModal
@@ -284,6 +249,42 @@ export const CleanupPage: React.FC<CleanupPageProps> = ({ cleanupSuggestions, lo
           </div>
         </div>
       )}
+      {/* Individual File Deletion Confirmation Modal */}
+      <AlertModal
+        isOpen={Boolean(individualDeleteTarget)}
+        title='Delete Item Permanently?'
+        subtitle={individualDeleteTarget?.name}
+        message='This will permanently delete this item from your disk. This action cannot be undone.'
+        confirmLabel='Delete Permanently'
+        cancelLabel='Cancel'
+        variant='danger'
+        isLoading={false}
+        onConfirm={async () => {
+          if (!individualDeleteTarget) return;
+          const target = individualDeleteTarget;
+          
+          // Optimistically update frontend state
+          setDetailsList((prev) => prev.filter((item) => item.path !== target.path));
+          setIndividualDeleteTarget(null); // Close modal instantly
+
+          try {
+            await invoke("delete_item_permanently", { targetPath: target.path });
+            showToast({
+              message: `Successfully deleted ${target.name}.`,
+              type: "success",
+            });
+            onRefresh();
+          } catch (err) {
+            console.error(err);
+            showToast({
+              message: `Failed to delete ${target.name}: ${err}`,
+              type: "error",
+            });
+            onRefresh(); // Restore list on failure
+          }
+        }}
+        onCancel={() => setIndividualDeleteTarget(null)}
+      />
     </div>
   );
 };

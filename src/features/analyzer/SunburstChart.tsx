@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
-import { FileNode, Slice } from '../types';
-import { formatBytes, truncate, getNodeColor } from '../utils/formatters';
+import { FileNode, Slice } from '../../types';
+import { formatBytes, truncate, getNodeColor } from '../../utils/formatters';
 
 interface SunburstChartProps {
   flatNodes: FileNode[];
@@ -11,7 +11,7 @@ interface SunburstChartProps {
   onNavigate: (nodeId: number) => void;
 }
 
-const MAX_DEPTH = 3;
+const MAX_DEPTH = 1;
 const GAP_ANGLE = 0.006; // Elegant subtle arc gap
 
 export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({
@@ -25,6 +25,7 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const slicesRef = useRef<Slice[]>([]);
+  const lastSlicesKeyRef = useRef<string>("");
 
   const rootNode = currentId !== null ? flatNodes[currentId] : null;
 
@@ -36,14 +37,18 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({
       function recurse(node: FileNode, depth: number, startAngle: number, endAngle: number) {
         if (depth >= MAX_DEPTH || node.size <= 0) return;
 
+        const validChildren = (node.childIds || [])
+          .map((id) => flatNodes[id])
+          .filter((n): n is FileNode => Boolean(n) && n.size > 0);
+
+        const totalChildrenSize = validChildren.reduce((sum, c) => sum + c.size, 0);
+        if (totalChildrenSize <= 0) return;
+
         let current = startAngle;
         const totalSweep = endAngle - startAngle;
 
-        for (const childId of node.childIds || []) {
-          const child = flatNodes[childId];
-          if (!child || child.size <= 0) continue;
-
-          const fraction = child.size / node.size;
+        for (const child of validChildren) {
+          const fraction = child.size / totalChildrenSize;
           const sweep = totalSweep * fraction;
           const childEnd = current + sweep;
 
@@ -98,8 +103,14 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({
     const innerRadius = maxRadius * 0.22;
     const ringWidth = (maxRadius - innerRadius) / MAX_DEPTH;
 
-    const slices = computeSlices(rootNode, innerRadius, ringWidth);
-    slicesRef.current = slices;
+    // Use cache key to avoid recomputing slices on hover re-renders
+    const cacheKey = `${rootNode.id}-${width}-${height}-${flatNodes.length}`;
+    let slices = slicesRef.current;
+    if (lastSlicesKeyRef.current !== cacheKey || slices.length === 0) {
+      slices = computeSlices(rootNode, innerRadius, ringWidth);
+      slicesRef.current = slices;
+      lastSlicesKeyRef.current = cacheKey;
+    }
 
     // Draw Slices
     for (const slice of slices) {

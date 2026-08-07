@@ -116,12 +116,14 @@ impl ScanCache {
 
         for node in new_nodes {
             let id = node.id;
+
             if id >= cache.len() {
                 cache.resize(id + 1, FileNode {
                     id: 0,
                     name: String::new(),
                     path: String::new(),
                     is_directory: false,
+                    is_symlink: false,
                     size: 0,
                     child_ids: Vec::new(),
                     parent_id: None,
@@ -175,16 +177,24 @@ impl Scanner {
         if let Ok(read_dir) = fs::read_dir(root_path) {
             for entry in read_dir.flatten() {
                 if let Ok(ft) = entry.file_type() {
-                    if ft.is_symlink() {
-                        continue;
+                    let is_symlink = ft.is_symlink();
+                    let mut is_dir = ft.is_dir();
+                    let mut is_file = ft.is_file();
+
+                    if is_symlink {
+                        if let Ok(target) = fs::canonicalize(entry.path()) {
+                            is_dir = target.is_dir();
+                            is_file = target.is_file();
+                        }
                     }
-                    if ft.is_dir() {
+
+                    if is_dir {
                         let name = entry.file_name();
                         if !Self::should_skip_directory(root_path, &name) {
-                            dir_entries.push(entry);
+                            dir_entries.push((entry, is_symlink));
                         }
-                    } else if ft.is_file() {
-                        file_entries.push(entry);
+                    } else if is_file {
+                        file_entries.push((entry, is_symlink));
                     }
                 }
             }
@@ -193,28 +203,34 @@ impl Scanner {
         let has_fda = crate::services::disk::has_full_disk_access();
 
         // Process child subdirectories in parallel using Rayon
-        let dirs: Vec<(String, PathBuf, u64)> = dir_entries
+        let dirs: Vec<(String, PathBuf, u64, bool)> = dir_entries
             .into_par_iter()
-            .map(|entry| {
+            .map(|(entry, is_sym)| {
                 let entry_path = entry.path();
                 let name = entry.file_name().to_string_lossy().into_owned();
-                let size = if has_fda {
+                let size = if is_sym {
+                    0
+                } else if has_fda {
                     crate::services::get_dir_size_parallel(&entry_path)
                 } else {
                     0
                 };
-                (name, entry_path, size)
+                (name, entry_path, size, is_sym)
             })
             .collect();
 
         // Process child files
-        let files: Vec<(String, u64)> = file_entries
+        let files: Vec<(String, u64, bool)> = file_entries
             .into_iter()
-            .map(|entry| {
-                let meta = entry.metadata().ok();
-                let size = meta.as_ref().map(get_file_physical_size).unwrap_or(0);
+            .map(|(entry, is_sym)| {
+                let size = if is_sym {
+                    0
+                } else {
+                    let meta = entry.metadata().ok();
+                    meta.as_ref().map(get_file_physical_size).unwrap_or(0)
+                };
                 let name = entry.file_name().to_string_lossy().into_owned();
-                (name, size)
+                (name, size, is_sym)
             })
             .collect();
 
@@ -227,6 +243,7 @@ impl Scanner {
             name: root_name,
             path: target_path.to_string(),
             is_directory: true,
+            is_symlink: false,
             size: root_size,
             child_ids: Vec::new(),
             parent_id: None,
@@ -239,7 +256,7 @@ impl Scanner {
         let mut sorted_dirs = dirs;
         sorted_dirs.sort_unstable_by(|a, b| b.2.cmp(&a.2));
 
-        for (name, _path_buf, size) in sorted_dirs {
+        for (name, _path_buf, size, is_symlink) in sorted_dirs {
             let child_id = nodes.len();
             child_ids.push(child_id);
             nodes.push(FileNode {
@@ -247,6 +264,7 @@ impl Scanner {
                 name,
                 path: String::new(),
                 is_directory: true,
+                is_symlink,
                 size,
                 child_ids: Vec::new(),
                 parent_id: Some(0),
@@ -258,7 +276,7 @@ impl Scanner {
         let mut sorted_files = files;
         sorted_files.sort_unstable_by(|a, b| b.1.cmp(&a.1));
 
-        for (name, size) in sorted_files {
+        for (name, size, is_symlink) in sorted_files {
             let child_id = nodes.len();
             child_ids.push(child_id);
             nodes.push(FileNode {
@@ -266,6 +284,7 @@ impl Scanner {
                 name,
                 path: String::new(),
                 is_directory: false,
+                is_symlink,
                 size,
                 child_ids: Vec::new(),
                 parent_id: Some(0),

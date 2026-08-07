@@ -21,6 +21,7 @@ pub fn run() {
             commands::get_disk_info,
             commands::fetch_system_drives,
             commands::fetch_user_folders,
+            commands::fetch_system_root_folders,
             commands::fetch_large_files,
             commands::fetch_cleanup_suggestions,
             commands::fetch_duplicate_files,

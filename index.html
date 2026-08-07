@@ -8,6 +8,32 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        try {
+          const savedMode = localStorage.getItem('hyperdisk_theme_mode') || 'dark';
+          let isDark = savedMode === 'dark';
+          if (savedMode === 'system') {
+            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          }
+          const root = document.documentElement;
+          if (isDark) {
+            root.classList.add('dark');
+          } else {
+            root.classList.remove('dark');
+          }
+
+          const savedFont = localStorage.getItem('hyperdisk_font');
+          if (savedFont) {
+            const fontStr = `"${savedFont}", system-ui, -apple-system, sans-serif`;
+            root.style.setProperty('--font-custom', fontStr);
+            root.style.setProperty('--font-sans', fontStr);
+          }
+        } catch (e) {
+          console.warn('Theme pre-initialization failed:', e);
+        }
+      })();
+    </script>
   </head>
   <body class="bg-background text-slate-100 antialiased overflow-hidden">
     <div id="root"></div>

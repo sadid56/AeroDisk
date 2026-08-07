@@ -31,13 +31,13 @@ export const BreadcrumbNav: React.FC<BreadcrumbNavProps> = React.memo(({ flatNod
         return (
           <React.Fragment key={id}>
             <Button
-              variant={isLast ? "secondary" : "ghost"}
+              variant="ghost"
               size='sm'
               onClick={() => onNavigate(id)}
               leftIcon={index === 0 ? <Folder className='w-3.5 h-3.5' /> : undefined}
               className={
                 isLast
-                  ? "bg-accent-purple/15 text-accent-purple font-semibold border-accent-purple/30 hover:bg-accent-purple/25"
+                  ? "!bg-accent-purple/10 !text-accent-purple font-semibold border !border-accent-purple/20 hover:!bg-accent-purple/20 shadow-sm dark:shadow-none"
                   : "text-slate-400 hover:text-slate-200"
               }
             >

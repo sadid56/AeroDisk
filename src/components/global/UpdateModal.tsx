@@ -1,6 +1,6 @@
 import React from 'react';
 import { Download, X, ArrowUpCircle } from 'lucide-react';
-import { Button } from './ui/Button';
+import { Button } from '../ui/Button';
 
 interface UpdateModalProps {
   isOpen: boolean;

@@ -1,8 +1,8 @@
 import React from 'react';
 import { Info } from "lucide-react";
-import { FileNode } from '../types';
-import { formatBytes, getFileCategory } from '../utils/formatters';
-import { getFullPath } from '../utils/pathUtils';
+import { FileNode } from '../../types';
+import { formatBytes, getFileCategory } from '../../utils/formatters';
+import { getFullPath } from '../../utils/pathUtils';
 
 interface FocusCardProps {
   node: FileNode | null;
@@ -40,7 +40,14 @@ export const FocusCard: React.FC<FocusCardProps> = React.memo(({ node, flatNodes
         </div>
       </div>
 
-      <span className='text-xs font-bold text-slate-200'>{formatBytes(node.size)}</span>
+      <div className='flex items-center gap-2 shrink-0'>
+        {node.isSymlink && (
+          <span className='px-1.5 py-0.5 rounded bg-slate-900/10 dark:bg-slate-800/80 text-[10px] text-slate-400 border border-surface-border font-semibold select-none' title="Symbolic Link (Skipped to prevent double counting)">
+            Symlink
+          </span>
+        )}
+        <span className='text-xs font-bold text-slate-200'>{formatBytes(node.size)}</span>
+      </div>
     </div>
   );
 });

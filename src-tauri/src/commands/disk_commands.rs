@@ -4,12 +4,16 @@ use crate::models::{
 use crate::services::{
     get_disk_space, get_system_drives, get_user_folders, list_directory_entries,
     get_large_files, get_cleanup_suggestions, get_duplicate_files, perform_system_cleanup,
-    get_cleanup_details, search_system_directory,
+    get_cleanup_details, search_system_directory, get_system_root_folders,
 };
 
 #[tauri::command]
-pub fn execute_system_cleanup(app: tauri::AppHandle, id: String) -> Result<(), String> {
-    perform_system_cleanup(&app, id)
+pub async fn execute_system_cleanup(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || {
+        perform_system_cleanup(&app, id)
+    })
+    .await
+    .map_err(|e| format!("Tokio task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -35,6 +39,11 @@ pub fn fetch_system_drives() -> Vec<SystemDrive> {
 #[tauri::command]
 pub fn fetch_user_folders(app: tauri::AppHandle) -> Vec<UserFolder> {
     get_user_folders(&app)
+}
+
+#[tauri::command]
+pub fn fetch_system_root_folders() -> Vec<UserFolder> {
+    get_system_root_folders()
 }
 
 #[tauri::command]

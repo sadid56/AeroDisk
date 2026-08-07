@@ -1,18 +1,18 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useScanner } from "./hooks/useScanner";
 import { useDiskInfo } from "./hooks/useDiskInfo";
 import { useSystemDrives } from "./hooks/useSystemDrives";
-import { ContextMenu } from "./components/ContextMenu";
+import { ContextMenu } from "./features/analyzer/ContextMenu";
 import { AlertModal } from "./components/ui/AlertModal";
-import { CreateFolderModal } from "./components/CreateFolderModal";
-import { SearchModal } from "./components/SearchModal";
+import { CreateFolderModal } from "./features/analyzer/CreateFolderModal";
+import { SearchModal } from "./components/global/SearchModal";
 import { ToastProvider, showToast } from "./providers/ToastProvider";
 import { AppRoutes } from "./routes/AppRoutes";
 import { useAutoUpdater } from "./hooks/useAutoUpdater";
-import { UpdateModal } from "./components/UpdateModal";
-import { applyThemeMode, applyFont, ThemeMode } from "./pages/SettingsPage";
+import { UpdateModal } from "./components/global/UpdateModal";
+import { applyThemeMode, applyFont, ThemeMode } from "./theme/themeManager";
 import { FileNode } from "./types";
 import { getFullPath } from "./utils/pathUtils";
 import { useToolsData } from "./hooks/useToolsData";
@@ -46,14 +46,23 @@ export const App: React.FC = () => {
     activeNode,
   } = useScanner();
 
+  const hoverTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const [scanOrigin, setScanOrigin] = useState<string>("/");
 
   const rootPath = flatNodes[0]?.path;
   const { refreshDiskInfo } = useDiskInfo(rootPath);
-  const { drives, folders, loading: drivesLoading, refetch: refetchDrives } = useSystemDrives();
-  const { largeFiles, cleanupSuggestions, duplicateGroups, loading: toolsLoading, refetchTools } = useToolsData();
+  const { drives, folders, systemRootFolders, loading: drivesLoading, refetch: refetchDrives } = useSystemDrives();
+  const {
+    largeFiles,
+    cleanupSuggestions,
+    duplicateGroups,
+    largeFilesLoading,
+    cleanupLoading,
+    duplicatesLoading,
+    refetchTools,
+  } = useToolsData();
   const { checkFDA, requestFDA } = useFullDiskAccess();
   const [showFdaModal, setShowFdaModal] = useState<boolean>(false);
 
@@ -139,26 +148,31 @@ export const App: React.FC = () => {
 
   const handleConfirmDelete = useCallback(async () => {
     if (!pendingDeleteNode) return;
-    setIsDeleting(true);
+    const node = pendingDeleteNode;
+    
+    // Optimistically update UI state instantly
+    setPendingDeleteNode(null);
+    removeNode(node.id);
+    
+    if (currentId === node.id) {
+      navigateTo(node.parentId !== null ? node.parentId : 0);
+    }
 
     try {
-      await invoke("delete_target_item", { targetPath: getFullPath(pendingDeleteNode.id, flatNodes) });
-      removeNode(pendingDeleteNode.id);
-
-      if (currentId === pendingDeleteNode.id) {
-        navigateTo(pendingDeleteNode.parentId !== null ? pendingDeleteNode.parentId : 0);
-      }
+      await invoke("delete_target_item", { targetPath: getFullPath(node.id, flatNodes) });
 
       if (rootPath) {
         refreshDiskInfo(rootPath);
       }
 
-      showToast({ message: "Moved to Trash", description: `Successfully deleted "${pendingDeleteNode.name}"`, type: "success" });
+      showToast({ message: "Moved to Trash", description: `Successfully deleted "${node.name}"`, type: "success" });
     } catch (err: any) {
       showToast({ message: "Deletion Failed", description: err || "Failed to move item to trash", type: "error" });
+      if (rootPath) {
+        refreshDiskInfo(rootPath); // Restore files/tree in UI on error
+      }
     } finally {
       setIsDeleting(false);
-      setPendingDeleteNode(null);
     }
   }, [pendingDeleteNode, removeNode, currentId, navigateTo, rootPath, refreshDiskInfo, flatNodes]);
 
@@ -192,8 +206,23 @@ export const App: React.FC = () => {
   }, []);
 
   const handleHoverNode = useCallback((node: FileNode | null) => {
-    setHoveredNode(node);
+    if (hoverTimeoutRef.current !== null) {
+      cancelAnimationFrame(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = requestAnimationFrame(() => {
+      setHoveredNode(node);
+      hoverTimeoutRef.current = null;
+    });
   }, [setHoveredNode]);
+
+  // Clean up any pending animation frames on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current !== null) {
+        cancelAnimationFrame(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSelectNode = useCallback((node: FileNode | null) => {
     setSelectedNode(node);
@@ -286,11 +315,14 @@ export const App: React.FC = () => {
           updater={updater}
           drives={drives}
           folders={folders}
+          systemRootFolders={systemRootFolders}
           drivesLoading={drivesLoading}
           largeFiles={largeFiles}
           cleanupSuggestions={cleanupSuggestions}
           duplicateGroups={duplicateGroups}
-          toolsLoading={toolsLoading}
+          largeFilesLoading={largeFilesLoading}
+          cleanupLoading={cleanupLoading}
+          duplicatesLoading={duplicatesLoading}
           onRefreshTools={refetchTools}
         />
       </main>

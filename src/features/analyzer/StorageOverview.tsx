@@ -1,9 +1,9 @@
 import React, { useRef, useEffect } from "react";
 import { ArrowLeft, ChevronRight, Folder, Layers } from "lucide-react";
-import { FileNode } from "../types";
-import { formatBytes } from "../utils/formatters";
-import { Button } from "./ui/Button";
-import { Skeleton } from "./ui/Skeleton";
+import { FileNode } from "../../types";
+import { formatBytes } from "../../utils/formatters";
+import { Button } from "../../components/ui/Button";
+import { Skeleton } from "../../components/ui/Skeleton";
 
 interface StorageOverviewProps {
   activeNode: FileNode | null;
@@ -31,7 +31,7 @@ export const StorageOverview: React.FC<StorageOverviewProps> = React.memo(
 
     return (
       <div className='bg-surface/50 border-b border-surface-border px-4 py-2.5 flex justify-between items-center gap-3 text-xs'>
-        <div className='flex items-center gap-2'>
+        <div className='flex items-center gap-2 min-w-0 flex-1'>
           {/* Back Button */}
           <Button
             variant='outline'
@@ -51,7 +51,7 @@ export const StorageOverview: React.FC<StorageOverviewProps> = React.memo(
           </Button>
 
           {/* Breadcrumb with fixed width and horizontal scroll */}
-          <div ref={scrollRef} className='flex items-center gap-1 overflow-x-auto scrollbar-none min-w-0 flex-1 max-w-[360px]'>
+          <div ref={scrollRef} className='flex items-center gap-1 overflow-x-auto scrollbar-none min-w-0 flex-1 max-w-xs sm:max-w-md md:max-w-xl lg:max-w-2xl'>
             {breadcrumbIds.length > 0 ? (
               breadcrumbIds.map((id, index) => {
                 const node = flatNodes[id];
@@ -61,14 +61,14 @@ export const StorageOverview: React.FC<StorageOverviewProps> = React.memo(
                 return (
                   <React.Fragment key={id}>
                     <Button
-                      variant={isLast ? "secondary" : "ghost"}
+                      variant="ghost"
                       size='sm'
                       onClick={() => onNavigate(id)}
                       leftIcon={index === 0 ? <Folder className='w-3 h-3' /> : undefined}
                       className={
                         isLast
-                          ? "bg-accent-purple/15 text-accent-purple font-semibold border-accent-purple/30 hover:bg-accent-purple/25"
-                          : "text-slate-400 hover:text-slate-200"
+                          ? "!bg-accent-purple/10 !text-accent-purple font-semibold border !border-accent-purple/20 hover:!bg-accent-purple/20 shadow-sm dark:shadow-none shrink-0 whitespace-nowrap"
+                          : "text-slate-400 hover:text-slate-200 shrink-0 whitespace-nowrap"
                       }
                     >
                       <span>{node.name || "/"}</span>

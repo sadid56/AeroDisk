@@ -10,7 +10,7 @@ import { LargeFilesPage } from '../pages/LargeFilesPage';
 import { DuplicatesPage } from '../pages/DuplicatesPage';
 import { CleanupPage } from '../pages/CleanupPage';
 
-import { UpdatesPage } from '../pages/UpdatesPage';
+
 import { Button } from "../components/ui/Button";
 import { FileNode, SystemDrive, UserFolder, LargeFile, CleanupSuggestion, DuplicateGroup } from '../types';
 
@@ -35,11 +35,14 @@ interface AppRoutesProps {
   updater: any;
   drives: SystemDrive[];
   folders: UserFolder[];
+  systemRootFolders: UserFolder[];
   drivesLoading: boolean;
   largeFiles: LargeFile[];
   cleanupSuggestions: CleanupSuggestion[];
   duplicateGroups: DuplicateGroup[];
-  toolsLoading: boolean;
+  largeFilesLoading: boolean;
+  cleanupLoading: boolean;
+  duplicatesLoading: boolean;
   onRefreshTools: () => void;
   onBackToOrigin: () => void;
 }
@@ -66,11 +69,14 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   updater,
   drives,
   folders,
+  systemRootFolders,
   drivesLoading,
   largeFiles,
   cleanupSuggestions,
   duplicateGroups,
-  toolsLoading,
+  largeFilesLoading,
+  cleanupLoading,
+  duplicatesLoading,
   onRefreshTools,
 }) => {
   const navigate = useNavigate();
@@ -83,7 +89,10 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
           <DashboardPage
             drives={drives}
             folders={folders}
-            isLoading={drivesLoading}
+            systemRootFolders={systemRootFolders}
+            largeFiles={largeFiles}
+            cleanupSuggestions={cleanupSuggestions}
+            isLoading={drivesLoading || cleanupLoading}
             onScanPath={onScanPath}
             onNavigateTab={(tab) => navigate(`/${tab === "overview" ? "" : tab}`)}
           />
@@ -134,18 +143,27 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
       />
       <Route
         path='/volumes'
-        element={<VolumesPage drives={drives} isScanning={isScanning} onScanPath={onScanPath} />}
+        element={<VolumesPage drives={drives} isScanning={isScanning} onScanPath={onScanPath} flatNodes={flatNodes} />}
       />
       <Route
         path='/folders'
         element={<FoldersPage folders={folders} isScanning={isScanning} onScanPath={onScanPath} />}
       />
-      <Route path='/large-files' element={<LargeFilesPage largeFiles={largeFiles} loading={toolsLoading} onRefresh={onRefreshTools} />} />
-      <Route path='/duplicates' element={<DuplicatesPage duplicateGroups={duplicateGroups} loading={toolsLoading} onRefresh={onRefreshTools} />} />
-      <Route path='/cleanup' element={<CleanupPage cleanupSuggestions={cleanupSuggestions} loading={toolsLoading} onRefresh={onRefreshTools} />} />
-      <Route path='/settings' element={<SettingsPage onBackToAnalyzer={() => navigate("/analyzer")} />} />
-
-      <Route path='/updates' element={<UpdatesPage onBack={() => navigate("/settings")} updater={updater} />} />
+      <Route path='/large-files' element={<LargeFilesPage largeFiles={largeFiles} loading={largeFilesLoading} onRefresh={onRefreshTools} />} />
+      <Route path='/duplicates' element={<DuplicatesPage duplicateGroups={duplicateGroups} loading={duplicatesLoading} onRefresh={onRefreshTools} />} />
+      <Route path='/cleanup' element={<CleanupPage cleanupSuggestions={cleanupSuggestions} loading={cleanupLoading} onRefresh={onRefreshTools} />} />
+      <Route
+        path='/settings'
+        element={
+          <SettingsPage
+            onBackToAnalyzer={() => {
+              if (hasScanData) navigate("/analyzer");
+              else navigate("/");
+            }}
+            updater={updater}
+          />
+        }
+      />
     </Routes>
   );
 };

@@ -79,7 +79,7 @@ export const HomePage: React.FC<HomePageProps> = React.memo(({ onScanPath, isSca
         {/* Simplified Flat Header */}
         <header className='flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-surface-border pb-6'>
           <div className='space-y-1'>
-            <h1 className='text-xl font-bold tracking-tight text-white sm:text-2xl'>Storage Analyzer</h1>
+            <h1 className='text-xl font-bold tracking-tight text-slate-100 sm:text-2xl'>Storage Analyzer</h1>
             <p className='text-xs text-slate-400'>Select a local volume or folder to scan storage usage.</p>
           </div>
           <div className='flex items-center gap-3 w-full md:w-auto'>
@@ -209,8 +209,11 @@ export const HomePage: React.FC<HomePageProps> = React.memo(({ onScanPath, isSca
                     ) : (
                       <div className='h-full bg-indigo-500/85 transition-all duration-300' style={{ width: `${clampedPct}%` }} />
                     )}
-                    {/* Free segment */}
-                    <div className='h-full flex-1 bg-slate-750/30 flex items-center justify-center font-mono text-[10px] font-bold text-slate-200'>
+                    {/* Floating centered text with high readability shadow */}
+                    <div 
+                      className='absolute inset-0 flex items-center justify-center font-mono text-[10px] font-bold text-white pointer-events-none'
+                      style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}
+                    >
                       <span>{formatBytes(drive.available_space)} free</span>
                     </div>
                   </div>
