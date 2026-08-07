@@ -75,8 +75,13 @@ install_linux() {
 
     echo "Checking latest release of ${DISPLAY_NAME} on GitHub..."
     LATEST_RELEASE=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest")
-    
     VERSION=$(echo "$LATEST_RELEASE" | grep '"tag_name":' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+    
+    # Fallback if GitHub API rate limit is exceeded
+    if [ -z "$VERSION" ]; then
+        VERSION=$(curl -sI "https://github.com/${REPO}/releases/latest" | grep -i '^location:' | tr -d '\r' | sed -E 's/.*\/tag\/([^[:space:]]+).*/\1/')
+    fi
+    
     if [ -z "$VERSION" ]; then
         echo "Error: Could not retrieve latest version from GitHub."
         exit 1
@@ -87,22 +92,38 @@ install_linux() {
     echo "Latest version found: ${VERSION}"
 
     # Search for compiled tar.gz asset (e.g. HyperDisk_linux_x64.tar.gz)
-    DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.tar\.gz" | grep -iv "source" | head -n 1 | cut -d'"' -f4)
-    
+    DOWNLOAD_URL=""
     IS_TAR_GZ=false
-    if [ -n "$DOWNLOAD_URL" ]; then
-        IS_TAR_GZ=true
-        ASSET_NAME=$(basename "$DOWNLOAD_URL")
-    else
-        # Fallback to AppImage asset if no tar.gz binary release found
-        DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.AppImage" | head -n 1 | cut -d'"' -f4)
-        ASSET_NAME=$(basename "$DOWNLOAD_URL")
+
+    if echo "$LATEST_RELEASE" | grep -q '"browser_download_url"'; then
+        DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.tar\.gz" | grep -iv "source" | head -n 1 | cut -d'"' -f4)
+        if [ -n "$DOWNLOAD_URL" ]; then
+            IS_TAR_GZ=true
+        else
+            DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.AppImage" | head -n 1 | cut -d'"' -f4)
+        fi
+    fi
+
+    # Fallback to scraping the expanded assets page if API rate limited
+    if [ -z "$DOWNLOAD_URL" ]; then
+        ASSET_PATHS=$(curl -sL "https://github.com/${REPO}/releases/expanded_assets/${VERSION}" | grep -o "/${REPO}/releases/download/[^\"]*")
+        RELATIVE_URL=$(echo "$ASSET_PATHS" | grep -i "\.tar\.gz" | grep -iv "source" | head -n 1)
+        if [ -n "$RELATIVE_URL" ]; then
+            IS_TAR_GZ=true
+            DOWNLOAD_URL="https://github.com${RELATIVE_URL}"
+        else
+            RELATIVE_URL=$(echo "$ASSET_PATHS" | grep -i "\.AppImage" | head -n 1)
+            if [ -n "$RELATIVE_URL" ]; then
+                DOWNLOAD_URL="https://github.com${RELATIVE_URL}"
+            fi
+        fi
     fi
 
     if [ -z "$DOWNLOAD_URL" ]; then
         echo "Error: Could not find suitable tar.gz or AppImage release asset for version ${VERSION}."
         exit 1
     fi
+    ASSET_NAME=$(basename "$DOWNLOAD_URL")
 
     if [ "$IS_TAR_GZ" = true ]; then
         echo "Downloading ${ASSET_NAME}..."
@@ -193,8 +214,13 @@ EOF
 install_mac() {
     echo "Checking latest release of ${DISPLAY_NAME} on GitHub..."
     LATEST_RELEASE=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest")
-    
     VERSION=$(echo "$LATEST_RELEASE" | grep '"tag_name":' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+    
+    # Fallback if GitHub API rate limit is exceeded
+    if [ -z "$VERSION" ]; then
+        VERSION=$(curl -sI "https://github.com/${REPO}/releases/latest" | grep -i '^location:' | tr -d '\r' | sed -E 's/.*\/tag\/([^[:space:]]+).*/\1/')
+    fi
+    
     if [ -z "$VERSION" ]; then
         echo "Error: Could not retrieve latest version from GitHub."
         exit 1
@@ -203,7 +229,18 @@ install_mac() {
     echo "Latest version found: ${VERSION}"
 
     # Search for compiled dmg asset
-    DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.dmg" | head -n 1 | cut -d'"' -f4)
+    DOWNLOAD_URL=""
+    if echo "$LATEST_RELEASE" | grep -q '"browser_download_url"'; then
+        DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | grep -o '"browser_download_url": "[^"]*' | grep -i "\.dmg" | head -n 1 | cut -d'"' -f4)
+    fi
+    
+    # Fallback to scraping the expanded assets page if API rate limited
+    if [ -z "$DOWNLOAD_URL" ]; then
+        RELATIVE_URL=$(curl -sL "https://github.com/${REPO}/releases/expanded_assets/${VERSION}" | grep -o "/${REPO}/releases/download/[^\"]*" | grep -i "\.dmg" | head -n 1)
+        if [ -n "$RELATIVE_URL" ]; then
+            DOWNLOAD_URL="https://github.com${RELATIVE_URL}"
+        fi
+    fi
     
     if [ -z "$DOWNLOAD_URL" ]; then
         echo "Error: Could not find macOS .dmg release asset for version ${VERSION}."
